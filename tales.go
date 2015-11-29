@@ -102,7 +102,7 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 		if len(pathElements) < 2 {
 			// In case the template does something silly like: repeat |  string: No repeat, we should check and act on any remaining expressions
 			if endOfExpression > -1 {
-				return t.evaluate(pathExpression[endOfExpression+1:])
+				return t.evaluate(talesExpression[endOfExpression+1:])
 			}
 			// If this is the last expression being evaluated - return None
 			return None
@@ -114,17 +114,29 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 	// Check local variables next
 	value, ok := t.localVariables.GetValue(objectName)
 	if ok {
-		return t.resolvePathObject(value, pathElements[1:])
+		pathValue := t.resolvePathObject(value, pathElements[1:])
+		if pathValue == None && endOfExpression > -1 {
+			return t.evaluate(talesExpression[endOfExpression+1:])
+		}
+		return pathValue
 	}
 
 	// Check the global variables
 	value, ok = t.globalVariables.GetValue(objectName)
 	if ok {
-		return t.resolvePathObject(value, pathElements[1:])
+		pathValue := t.resolvePathObject(value, pathElements[1:])
+		if pathValue == None && endOfExpression > -1 {
+			return t.evaluate(talesExpression[endOfExpression+1:])
+		}
+		return pathValue
 	}
 
 	// Try the user provided data
-	return t.resolvePathObject(t.data, pathElements)
+	pathValue := t.resolvePathObject(t.data, pathElements)
+	if pathValue == None && endOfExpression > -1 {
+		return t.evaluate(talesExpression[endOfExpression+1:])
+	}
+	return pathValue
 }
 
 func (t *tales) resolvePathObject(value interface{}, path []string) interface{} {
@@ -151,6 +163,11 @@ func (t *tales) resolveObjectProperty(value interface{}, property string) interf
 		mapResult := data.MapIndex(propertyValue)
 		if mapResult.IsValid() {
 			t.debug("TALES: Found value in map\n")
+			// If the value is already an interface, just return it.
+			// This is required for using None and Default.
+			if reflect.ValueOf(mapResult).Kind() == reflect.Interface {
+				return mapResult
+			}
 			return mapResult.Interface()
 		}
 		return None

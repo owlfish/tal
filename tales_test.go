@@ -33,6 +33,19 @@ func TestTalesDeepPaths(t *testing.T) {
 	})
 }
 
+func TestTalesOrPaths(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["a"] = None
+	vals["b"] = "Hello"
+	vals["c"] = "World"
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><h1 tal:content="a|b"></h1><h2 tal:content="b|c"></h2><h3 tal:content="a|b|c"></h3></body></html>`,
+		`<html><body><h1>Hello</h1><h2>Hello</h2><h3>Hello</h3></body></html>`,
+	})
+}
+
 type talesTest struct {
 	Context  interface{}
 	Template string
