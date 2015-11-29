@@ -24,6 +24,8 @@ func (err *CompileError) Error() string {
 const (
 	ErrUnexpectedCloseTag = iota
 	ErrUnknownTalCommand
+	ErrExpressionMalformed
+	ErrExpressionMissing
 )
 
 func newCompileError(errType int, lastToken []byte, nextData []byte) *CompileError {

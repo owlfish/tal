@@ -2,25 +2,28 @@ package tal
 
 import (
 	"bytes"
+	"log"
 	"strings"
 	"testing"
 )
 
-func PassThrough(t *testing.T) {
+var debug RenderConfig = RenderDebugLogging(log.Printf)
+
+func TestPassThrough(t *testing.T) {
 	runTest(t, talTest{
 		struct{}{},
 		` <!DOCTYPE html>
 		<html>
-		<body><h1>Test <b>plan <a>at html</a></b> with an attribute <img src="test.png"></h1><!-- Comment here --></body>
+		<body><h1>Test &lt; &amp; &gt; <b>plan <a>at html</a></b> with an attribute <img src="test.png"></h1><!-- Comment here --></body>
 		</html>`,
 		` <!DOCTYPE html>
 		<html>
-		<body><h1>Test <b>plan <a>at html</a></b> with an attribute <img src="test.png"></h1><!-- Comment here --></body>
+		<body><h1>Test &lt; &amp; &gt; <b>plan <a>at html</a></b> with an attribute <img src="test.png"></h1><!-- Comment here --></body>
 		</html>`,
 	})
 }
 
-func TalReplaceSingleTag(t *testing.T) {
+func TestTalReplaceSingleTag(t *testing.T) {
 	runTest(t, talTest{
 		struct {
 			ContextValue string
@@ -30,7 +33,7 @@ func TalReplaceSingleTag(t *testing.T) {
 	})
 }
 
-func TalReplaceDefaultValue(t *testing.T) {
+func TestTalReplaceDefaultValue(t *testing.T) {
 	runTest(t, talTest{
 		struct {
 			ContextValue interface{}
@@ -40,7 +43,7 @@ func TalReplaceDefaultValue(t *testing.T) {
 	})
 }
 
-func TalReplaceNoneValue(t *testing.T) {
+func TestTalReplaceNoneValue(t *testing.T) {
 	runTest(t, talTest{
 		struct {
 			ContextValue interface{}
@@ -50,7 +53,7 @@ func TalReplaceNoneValue(t *testing.T) {
 	})
 }
 
-func TalContentSimpleValue(t *testing.T) {
+func TestTalContentSimpleValue(t *testing.T) {
 	runTest(t, talTest{
 		struct {
 			ContextValue interface{}
@@ -60,7 +63,7 @@ func TalContentSimpleValue(t *testing.T) {
 	})
 }
 
-func TalContentNoneValue(t *testing.T) {
+func TestTalContentNoneValue(t *testing.T) {
 	runTest(t, talTest{
 		struct {
 			ContextValue interface{}
@@ -70,7 +73,7 @@ func TalContentNoneValue(t *testing.T) {
 	})
 }
 
-func TalContentDefaultValue(t *testing.T) {
+func TestTalContentDefaultValue(t *testing.T) {
 	runTest(t, talTest{
 		struct {
 			ContextValue interface{}
@@ -120,13 +123,65 @@ func TestTalOmitTagTrue(t *testing.T) {
 	})
 }
 
+func TestTalRepeatNoneSequence(t *testing.T) {
+	runTest(t, talTest{
+		struct {
+			ContextValue interface{}
+		}{false},
+		`<body><h1>Test</h1> <ul> <li tal:repeat="vals ContextValue" class="line-item">Value <b tal:content="vals">Vals go here</b> done.</li></ul></body>`,
+		`<body><h1>Test</h1> <ul> </ul></body>`,
+	})
+}
+
+func TestTalRepeatDefault(t *testing.T) {
+	runTest(t, talTest{
+		struct {
+			ContextValue interface{}
+			Vals         string
+		}{
+			Default,
+			"Default vals",
+		},
+		`<body><h1>Test</h1> <ul> <li tal:repeat="vals ContextValue" class="line-item">Value <b tal:content="vals">Vals go here</b> done.</li></ul></body>`,
+		`<body><h1>Test</h1> <ul> <li class="line-item">Value <b>Default vals</b> done.</li></ul></body>`,
+	})
+}
+
+func TestTalRepeatOneEntry(t *testing.T) {
+	runTest(t, talTest{
+		struct {
+			ContextValue []string
+			Vals         string
+		}{
+			[]string{"One value"},
+			"Default vals",
+		},
+		`<body><h1>Test</h1> <ul> <li tal:repeat="vals ContextValue" class="line-item">Value <b tal:content="vals">Vals go here</b> done.</li></ul><p tal:content="vals"></p></body>`,
+		`<body><h1>Test</h1> <ul> <li class="line-item">Value <b>One value</b> done.</li></ul><p>Default vals</p></body>`,
+	})
+}
+
+func TestTalRepeatTwoEntries(t *testing.T) {
+	runTest(t, talTest{
+		struct {
+			ContextValue []string
+			Vals         string
+		}{
+			[]string{"One value", "Two values"},
+			"Default vals",
+		},
+		`<body><h1>Test</h1> <ul> <li tal:repeat="vals ContextValue" class="line-item">Value <b tal:content="vals">Vals go here</b> done.</li></ul></body>`,
+		`<body><h1>Test</h1> <ul> <li class="line-item">Value <b>One value</b> done.</li><li class="line-item">Value <b>Two values</b> done.</li></ul></body>`,
+	})
+}
+
 type talTest struct {
 	Context  interface{}
 	Template string
 	Expected string
 }
 
-func runTest(t *testing.T, test talTest) {
+func runTest(t *testing.T, test talTest, cfg ...RenderConfig) {
 	temp, err := CompileTemplate(strings.NewReader(test.Template))
 	if err != nil {
 		t.Errorf("Error compiling template: %v\n", err)
@@ -134,7 +189,7 @@ func runTest(t *testing.T, test talTest) {
 	}
 
 	resultBuffer := &bytes.Buffer{}
-	err = temp.Render(test.Context, resultBuffer)
+	err = temp.Render(test.Context, resultBuffer, cfg...)
 
 	if err != nil {
 		t.Errorf("Error rendering template: %v\n", err)

@@ -9,9 +9,15 @@ import (
 	"strings"
 )
 
-type endActionFunc func(state *compileState)
+type LogFunc func(fmt string, args ...interface{})
 
-type startActionFunc func(originalAttributes []html.Attribute, talValue string, state *compileState)
+func defaultLogger(fmt string, args ...interface{}) {
+
+}
+
+type endActionFunc func()
+
+type startActionFunc func(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError
 
 type tagInfo struct {
 	tag        []byte
@@ -24,6 +30,7 @@ type compileState struct {
 	tokenizer   *html.Tokenizer
 	talStartTag *renderStartTag
 	talEndTag   *renderEndTag
+	nextId      int
 }
 
 /*
@@ -34,10 +41,22 @@ func (state *compileState) addTag(tag []byte) {
 }
 
 /*
-pushAction assocaites an action to be taken when the tag is pop'd from the stack
+pushAction associates an action to be taken when the tag is pop'd from the stack
 */
 func (state *compileState) pushAction(action endActionFunc) {
 	state.tagStack[len(state.tagStack)-1].popActions = append(state.tagStack[len(state.tagStack)-1].popActions, action)
+}
+
+/*
+insertAction places an endActionFunc at the start of the list of end actions to be taken
+*/
+func (state *compileState) insertAction(action endActionFunc) {
+	// Extend the length of the list of actions
+	state.tagStack[len(state.tagStack)-1].popActions = append(state.tagStack[len(state.tagStack)-1].popActions, action)
+	// Now shuffle everything up one, overwriting the new entry we just made
+	copy(state.tagStack[len(state.tagStack)-1].popActions[1:], state.tagStack[len(state.tagStack)-1].popActions[:])
+	// Finally, update the first entry
+	state.tagStack[len(state.tagStack)-1].popActions[0] = action
 }
 
 /*
@@ -51,7 +70,7 @@ func (state *compileState) popTag(tag []byte) error {
 		state.tagStack = state.tagStack[:len(state.tagStack)-1]
 		// Run any actions
 		for _, act := range candidate.popActions {
-			act(state)
+			act()
 		}
 		if bytes.Equal(candidate.tag, tag) {
 			return nil
@@ -61,15 +80,25 @@ func (state *compileState) popTag(tag []byte) error {
 	return newCompileError(ErrUnexpectedCloseTag, state.tokenizer.Raw(), state.tokenizer.Buffered())
 }
 
+/*
+error returns a CompileError with the context of where it happened.
+*/
+func (state *compileState) error(errorType int) *CompileError {
+	return newCompileError(errorType, state.tokenizer.Raw(), state.tokenizer.Buffered())
+}
+
 type talAttributes []html.Attribute
 
+/*
+talCommandProperties defines the priority order of tal commands and maps them to startActionFuncs
+*/
 var talCommandProperties = map[string]struct {
 	Priority    int
 	StartAction startActionFunc
 }{
 	"tal:define":     {0, unimplementedCommand},
 	"tal:condition":  {1, talConditionStart},
-	"tal:repeat":     {2, unimplementedCommand},
+	"tal:repeat":     {2, talRepeatStart},
 	"tal:content":    {3, talContentStart},
 	"tal:replace":    {4, talReplaceStart},
 	"tal:attributes": {5, unimplementedCommand},
@@ -97,33 +126,105 @@ func (s talAttributes) Less(i, j int) bool {
 	return iPriority < jPriority
 }
 
-func unimplementedCommand(originalAttributes []html.Attribute, talValue string, state *compileState) {
+func unimplementedCommand(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
 	state.template.addRenderInstruction([]byte("Unimplemented tal command."))
+	return nil
 }
 
-func talReplaceStart(originalAttributes []html.Attribute, talValue string, state *compileState) {
+func talReplaceStart(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
+	if len(talValue) == 0 {
+		return state.error(ErrExpressionMissing)
+	}
 	state.talStartTag.replaceCommand = true
 	state.talStartTag.contentExpression = talValue
+	return nil
 }
 
-func talContentStart(originalAttributes []html.Attribute, talValue string, state *compileState) {
+func talContentStart(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
+	if len(talValue) == 0 {
+		return state.error(ErrExpressionMissing)
+	}
 	state.talStartTag.replaceCommand = false
 	state.talStartTag.contentExpression = talValue
+	return nil
 }
 
-func talConditionStart(originalAttributes []html.Attribute, talValue string, state *compileState) {
+func talConditionStart(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
+	if len(talValue) == 0 {
+		return state.error(ErrExpressionMissing)
+	}
 	condition := renderCondition{condition: talValue}
 	state.template.addInstruction(&condition)
-	state.pushAction(func(state *compileState) {
-		// This action is executed once the end tag is seen
-		// condition and state is captured inside this closure
-		condition.endTagIndex = len(state.template.instructions)
-	})
+	state.pushAction(getTalConditionEndAction(state.template, &condition))
+	return nil
 }
 
-func talOmitTagStart(originalAttributes []html.Attribute, talValue string, state *compileState) {
+func getTalConditionEndAction(t *Template, condition *renderCondition) endActionFunc {
+	return func() {
+		// This action is executed once the end tag is seen
+		// condition and state is captured inside this closure
+		condition.endTagIndex = len(t.instructions) - 1
+	}
+}
+
+func talRepeatStart(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
+	parts := strings.Split(talValue, " ")
+	if len(parts) != 2 {
+		return state.error(ErrExpressionMalformed)
+	}
+	repeat := renderRepeat{repeatName: parts[0], condition: parts[1], repeatId: state.nextId}
+	state.nextId++
+	state.template.addInstruction(&repeat)
+	state.pushAction(getTalRepeatEndAction(state.template, &repeat, len(state.template.instructions)-1))
+	return nil
+}
+
+func getTalRepeatEndAction(t *Template, repeat *renderRepeat, startRepeatIndex int) endActionFunc {
+	return func() {
+		// Let the start tag know where the end tag is.
+		repeat.endTagIndex = len(t.instructions) - 1
+		// Add a end of repeat instruction.
+		endRepeat := &renderEndRepeat{repeatName: repeat.repeatName, repeatId: repeat.repeatId, repeatStartIndex: startRepeatIndex}
+		t.addInstruction(endRepeat)
+	}
+}
+
+func talOmitTagStart(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
+	if len(talValue) == 0 {
+		return state.error(ErrExpressionMissing)
+	}
 	state.talEndTag.checkOmitTagFlag = true
 	state.talStartTag.omitTagExpression = talValue
+	return nil
+}
+
+func getPlainEndTagAction(t *Template, tagName []byte) endActionFunc {
+	return func() {
+		var d buffer
+		d.appendString("</")
+		d.append(tagName)
+		d.appendString(">")
+		// Use a plain renderData for end tags that have no TAL associated with them.
+		t.addRenderInstruction(d)
+	}
+}
+
+/*
+getTalEndTagAction returns an endAction that completes setting up the start tag and adds the end tag instruction.
+
+This function is inserted into the start of the list of end actions, so all end actions done after this need to consider
+that the renderEndTag instruction has already been added to the template.
+*/
+func getTalEndTagAction(currentStartTag *renderStartTag, currentEndTag *renderEndTag, t *Template) endActionFunc {
+	return func() {
+		// This action is executed once the end tag is seen
+		currentStartTag.endTagIndex = len(t.instructions)
+
+		// Now add the end tag if appropriate
+		if !currentStartTag.voidElement {
+			t.instructions = append(t.instructions, currentEndTag)
+		}
+	}
 }
 
 func CompileTemplate(in io.Reader) (template *Template, err error) {
@@ -140,9 +241,9 @@ func CompileTemplate(in io.Reader) (template *Template, err error) {
 			}
 			return nil, tokenizer.Err()
 		case html.TextToken:
-			var d []byte
+			var d buffer
 			// Text() returns a []byte that may change, so we immediately make a copy
-			d = append(d, tokenizer.Text()...)
+			d.appendString(html.EscapeString(string(tokenizer.Text())))
 			template.addRenderInstruction(d)
 		case html.StartTagToken:
 			rawTagName, hasAttr := tokenizer.TagName()
@@ -159,7 +260,7 @@ func CompileTemplate(in io.Reader) (template *Template, err error) {
 				voidElement = true
 			}
 
-			var d []byte
+			var d buffer
 			var originalAtts []html.Attribute
 			var talAtts []html.Attribute
 			var key, val, rawkey, rawval []byte
@@ -178,30 +279,23 @@ func CompileTemplate(in io.Reader) (template *Template, err error) {
 				}
 			}
 			if len(talAtts) == 0 {
-				d = append(d, []byte("<")...)
-				d = append(d, tagName...)
+				d.appendString("<")
+				d.append(tagName)
 				for _, att := range originalAtts {
-					d = append(d, []byte(" ")...)
-					d = append(d, []byte(att.Key)...)
-					d = append(d, []byte(`="`)...)
-					d = append(d, []byte(html.EscapeString(att.Val))...)
-					d = append(d, []byte(`"`)...)
+					d.appendString(" ")
+					d.appendString(att.Key)
+					d.appendString(`="`)
+					d.appendString(html.EscapeString(att.Val))
+					d.appendString(`"`)
 				}
-				d = append(d, []byte(">")...)
+				d.appendString(">")
 				template.addRenderInstruction(d)
 
 				// Register an action to add the close tag in when we see it.
 				// This is done via an action so that we can use different logic for close tags that have tal commands
 				// tagName is captured by the closure
 				if !htmlVoidElements[string(tagName)] {
-					state.pushAction(func(state *compileState) {
-						var d []byte
-						d = append(d, []byte("</")...)
-						d = append(d, tagName...)
-						d = append(d, []byte(">")...)
-						// Use a plain renderData for end tags that have no TAL associated with them.
-						template.addRenderInstruction(d)
-					})
+					state.pushAction(getPlainEndTagAction(template, tagName))
 				}
 				break
 			}
@@ -233,16 +327,7 @@ func CompileTemplate(in io.Reader) (template *Template, err error) {
 
 				currentStartTag, currentEndTag and tagName are defined inside the for loop and so are captured within the closure
 			*/
-			state.pushAction(func(st *compileState) {
-				// This action is executed once the end tag is seen
-				// currentStartTag is captured inside this closure
-				currentStartTag.endTagIndex = len(st.template.instructions)
-
-				// Now add the end tag if appropriate
-				if !currentStartTag.voidElement {
-					template.instructions = append(template.instructions, currentEndTag)
-				}
-			})
+			state.insertAction(getTalEndTagAction(currentStartTag, currentEndTag, template))
 
 		case html.EndTagToken:
 			tagName, _ := tokenizer.TagName()
@@ -257,16 +342,16 @@ func CompileTemplate(in io.Reader) (template *Template, err error) {
 			//template.addRenderInstruction(d)
 		case html.SelfClosingTagToken:
 		case html.CommentToken:
-			var d []byte
-			d = append(d, []byte("<!--")...)
-			d = append(d, tokenizer.Text()...)
-			d = append(d, []byte("-->")...)
+			var d buffer
+			d.appendString("<!--")
+			d.appendString(html.EscapeString(string(tokenizer.Text())))
+			d.appendString("-->")
 			template.addRenderInstruction(d)
 		case html.DoctypeToken:
-			var d []byte
-			d = append(d, []byte("<!DOCTYPE ")...)
-			d = append(d, tokenizer.Text()...)
-			d = append(d, []byte(">")...)
+			var d buffer
+			d.appendString("<!DOCTYPE ")
+			d.appendString(html.EscapeString(string(tokenizer.Text())))
+			d.appendString(">")
 			template.addRenderInstruction(d)
 		}
 	}
