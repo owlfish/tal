@@ -57,21 +57,6 @@ func TestTalesRepeatIndex(t *testing.T) {
 	})
 }
 
-func TestTalesAccessStruct(t *testing.T) {
-	vals := make(map[string]interface{})
-	vals["a"] = struct {
-		A string
-		B string
-		C string
-	}{"One", "Two", "Three"}
-
-	runTalesTest(t, talesTest{
-		vals,
-		`<html><body><p tal:content="a"></p></body></html>`,
-		`<html><body><p>?</p></body></html>`,
-	})
-}
-
 type talesTest struct {
 	Context  interface{}
 	Template string

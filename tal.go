@@ -96,7 +96,7 @@ var talCommandProperties = map[string]struct {
 	Priority    int
 	StartAction startActionFunc
 }{
-	"tal:define":     {0, unimplementedCommand},
+	"tal:define":     {0, talDefineStart},
 	"tal:condition":  {1, talConditionStart},
 	"tal:repeat":     {2, talRepeatStart},
 	"tal:content":    {3, talContentStart},
@@ -126,9 +126,81 @@ func (s talAttributes) Less(i, j int) bool {
 	return iPriority < jPriority
 }
 
+func splitDefineArguments(value string) []string {
+	parts := strings.Split(value, ";")
+	var results []string
+	var candidate string
+	escapedSepFound := false
+	for _, part := range parts {
+		if len(part) == 0 {
+			// We have a double escape - append a semi-colon
+			candidate = candidate + ";"
+			escapedSepFound = true
+		} else {
+			// Is this part of an escape char?
+			if escapedSepFound {
+				candidate += part
+			} else {
+				if len(candidate) > 0 {
+					// Clear up the old candidate
+					results = append(results, candidate)
+				}
+				candidate = part
+			}
+			escapedSepFound = false
+		}
+	}
+	if len(candidate) > 0 {
+		// Clear up the old candidate
+		results = append(results, candidate)
+	}
+	return results
+}
+
 func unimplementedCommand(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
 	state.template.addRenderInstruction([]byte("Unimplemented tal command."))
 	return nil
+}
+
+func talDefineStart(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
+	definitionList := splitDefineArguments(talValue)
+	for _, definition := range definitionList {
+		if strings.HasPrefix(definition, "local ") && len(definition) > 6 {
+			actualDef := strings.Split(definition[6:], " ")
+			if len(actualDef) == 2 {
+				state.template.addInstruction(&defineVariable{name: actualDef[0], global: false, expression: actualDef[1]})
+				// Local variables need popping when the end tag is seen.
+				state.pushAction(getTalDefineEndAction(state.template))
+			} else {
+				return state.error(ErrExpressionMissing)
+			}
+		} else if strings.HasPrefix(definition, "global ") && len(definition) > 7 {
+			actualDef := strings.Split(definition[7:], " ")
+			if len(actualDef) == 2 {
+				state.template.addInstruction(&defineVariable{name: actualDef[0], global: true, expression: actualDef[1]})
+			} else {
+				return state.error(ErrExpressionMissing)
+			}
+		} else {
+			// Treat as a local variable defintion.
+			actualDef := strings.Split(definition, " ")
+			if len(actualDef) == 2 {
+				state.template.addInstruction(&defineVariable{name: actualDef[0], global: false, expression: actualDef[1]})
+				// Local variables need popping when the end tag is seen.
+				state.pushAction(getTalDefineEndAction(state.template))
+			} else {
+				return state.error(ErrExpressionMissing)
+			}
+		}
+	}
+	return nil
+}
+
+func getTalDefineEndAction(t *Template) endActionFunc {
+	return func() {
+		// Add a local variable remove instruction.
+		t.addInstruction(&removeLocalVariable{})
+	}
 }
 
 func talReplaceStart(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
@@ -136,7 +208,17 @@ func talReplaceStart(originalAttributes []html.Attribute, talValue string, state
 		return state.error(ErrExpressionMissing)
 	}
 	state.talStartTag.replaceCommand = true
-	state.talStartTag.contentExpression = talValue
+
+	// If we start with "text " and have an expression after that, remove the prefix
+	if strings.HasPrefix(talValue, "text ") && len(talValue) > 5 {
+		state.talStartTag.contentExpression = talValue[5:]
+	} else if strings.HasPrefix(talValue, "structure ") && len(talValue) > 10 {
+		state.talStartTag.contentExpression = talValue[10:]
+		state.talStartTag.contentStructure = true
+	} else {
+		state.talStartTag.contentExpression = talValue
+	}
+
 	return nil
 }
 
@@ -145,7 +227,16 @@ func talContentStart(originalAttributes []html.Attribute, talValue string, state
 		return state.error(ErrExpressionMissing)
 	}
 	state.talStartTag.replaceCommand = false
-	state.talStartTag.contentExpression = talValue
+
+	// If we start with "text " and have an expression after that, remove the prefix
+	if strings.HasPrefix(talValue, "text ") && len(talValue) > 5 {
+		state.talStartTag.contentExpression = talValue[5:]
+	} else if strings.HasPrefix(talValue, "structure ") && len(talValue) > 10 {
+		state.talStartTag.contentExpression = talValue[10:]
+		state.talStartTag.contentStructure = true
+	} else {
+		state.talStartTag.contentExpression = talValue
+	}
 	return nil
 }
 

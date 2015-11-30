@@ -65,6 +65,52 @@ func (d *renderEndTag) String() string {
 }
 
 /*
+A defineVariable is used to set local and global variable values.
+*/
+type defineVariable struct {
+	// name is the name of the variable to set
+	name string
+	// global is true if the definition should be set globally
+	global bool
+	// expression is the value to set the varaible to at runtime
+	expression string
+}
+
+func (d *defineVariable) render(rc *renderContext) error {
+	contextValue := rc.talesContext.evaluate(d.expression)
+	if d.global {
+		rc.talesContext.globalVariables.SetValue(d.name, contextValue)
+	} else {
+		rc.talesContext.localVariables.AddValue(d.name, contextValue)
+	}
+	return nil
+}
+
+func (d *defineVariable) String() string {
+	typeOfVar := "local"
+	if d.global {
+		typeOfVar = "global"
+	}
+
+	return fmt.Sprintf("Set variable %v %v to %v", typeOfVar, d.name, d.expression)
+}
+
+/*
+removeLocalVariable removes the most recently defined local variable.
+*/
+type removeLocalVariable struct {
+}
+
+func (d *removeLocalVariable) render(rc *renderContext) error {
+	rc.talesContext.localVariables.RemoveValue()
+	return nil
+}
+
+func (d *removeLocalVariable) String() string {
+	return "Remove Local Variable"
+}
+
+/*
 renderRepeat is the templateInstruction for repeating blocks of instructions under tal:repeat.
 */
 type renderRepeat struct {
@@ -203,7 +249,8 @@ func (d *renderCondition) render(rc *renderContext) error {
 }
 
 type renderStartTag struct {
-	tagName              []byte
+	tagName []byte
+	// contentStructure is true if the content should be treated as structure rather than text
 	contentStructure     bool
 	contentExpression    string
 	originalAttributes   []html.Attribute
@@ -261,7 +308,11 @@ func (d *renderStartTag) render(rc *renderContext) error {
 	}
 
 	if contentValue != None {
-		rc.out.Write([]byte(fmt.Sprint(contentValue)))
+		if d.contentStructure {
+			rc.out.Write([]byte(fmt.Sprint(contentValue)))
+		} else {
+			rc.out.Write([]byte(html.EscapeString(fmt.Sprint(contentValue))))
+		}
 	}
 
 	if d.replaceCommand {
