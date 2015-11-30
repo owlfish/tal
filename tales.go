@@ -13,6 +13,10 @@ type repeatVariable struct {
 	repeatId         int
 }
 
+func (rv *repeatVariable) Index() int {
+	return rv.sequencePosition
+}
+
 func (rv *repeatVariable) indexedValue() interface{} {
 	return rv.sequenceValue.Index(rv.sequencePosition).Interface()
 }
@@ -107,8 +111,14 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 			// If this is the last expression being evaluated - return None
 			return None
 		}
-		value, _ := t.repeatVariables.GetValue(pathElements[1])
-		return t.resolvePathObject(value, pathElements[1:])
+		value, ok := t.repeatVariables.GetValue(pathElements[1])
+		if ok {
+			t.debug("Found repeat variable %v - resolve remaining path parts %v\n", pathElements[1], pathElements[2:])
+		} else {
+			t.debug("Unable to find repeat variable %v - returning None\n", pathElements[1])
+			return None
+		}
+		return t.resolvePathObject(value, pathElements[2:])
 	}
 
 	// Check local variables next
@@ -150,42 +160,60 @@ func (t *tales) resolvePathObject(value interface{}, path []string) interface{} 
 	return candidate
 }
 
+func (t *tales) callMethod(data reflect.Value, goFieldName string) (result interface{}) {
+	method := data.MethodByName(goFieldName)
+	t.debug("Result of looking for method %v: %v\n", goFieldName, method)
+	if method.IsValid() {
+		t.debug("Found method in struct, calling.\n")
+		var callArgs []reflect.Value = make([]reflect.Value, 0, 0)
+		results := method.Call(callArgs)
+		if len(results) > 0 {
+			return results[0].Interface()
+		}
+		return None
+	}
+	return nil
+}
+
 func (t *tales) resolveObjectProperty(value interface{}, property string) interface{} {
-	data := reflect.ValueOf(value)
-	data = reflect.Indirect(data)
+	rawData := reflect.ValueOf(value)
+	data := reflect.Indirect(rawData)
 	kind := data.Kind()
 	propertyValue := reflect.ValueOf(property)
 	t.debug("Looking for property %v in data %v (kind %v)\n", property, value, kind)
 	switch kind {
 	case reflect.Map:
 		// Lookup the value
-		t.debug("TALES: Found map\n")
 		mapResult := data.MapIndex(propertyValue)
 		if mapResult.IsValid() {
 			t.debug("TALES: Found value in map\n")
-			// If the value is already an interface, just return it.
-			// This is required for using None and Default.
-			if reflect.ValueOf(mapResult).Kind() == reflect.Interface {
-				return mapResult
-			}
 			return mapResult.Interface()
 		}
 		return None
 	case reflect.Struct:
 		// Lookup the value
-		t.debug("TALES: Found struct\n")
 		// Go field names start with upper case to be exported
 		goFieldName := strings.ToUpper(property[:1]) + property[1:]
 		structField := data.FieldByName(goFieldName)
-		// for i := 0; i < data.NumField(); i++ {
-		// 	t.debug("Stuct field %v found\n", data.Field(i))
-		// }
 		if structField.IsValid() {
 			t.debug("TALES: Found field in struct\n")
 			// Check that this is an exported field
 			if structType, _ := data.Type().FieldByName(goFieldName); structType.PkgPath == "" {
 				t.debug("TALES: Confirmed field in struct is exported\n")
 				return structField.Interface()
+			}
+		} else {
+			// Start by looking for pointer methods.
+			if rawData != data {
+				result := t.callMethod(rawData, goFieldName)
+				if result != nil {
+					return result
+				}
+			}
+			// Now call value methods
+			result := t.callMethod(data, goFieldName)
+			if result != nil {
+				return result
 			}
 		}
 		return None

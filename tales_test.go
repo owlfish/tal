@@ -46,6 +46,32 @@ func TestTalesOrPaths(t *testing.T) {
 	})
 }
 
+func TestTalesRepeatIndex(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["a"] = []string{"One", "Two", "Three"}
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><p tal:repeat="num a"><b tal:content="repeat/num/index"></b> - <b tal:content="num"></b></p></body></html>`,
+		`<html><body><p><b>0</b> - <b>One</b></p><p><b>1</b> - <b>Two</b></p><p><b>2</b> - <b>Three</b></p></body></html>`,
+	})
+}
+
+func TestTalesAccessStruct(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["a"] = struct {
+		A string
+		B string
+		C string
+	}{"One", "Two", "Three"}
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><p tal:content="a"></p></body></html>`,
+		`<html><body><p>?</p></body></html>`,
+	})
+}
+
 type talesTest struct {
 	Context  interface{}
 	Template string
