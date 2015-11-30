@@ -23,6 +23,36 @@ func RenderDebugLogging(logger LogFunc) RenderConfig {
 	}
 }
 
+type attributesList []html.Attribute
+
+func (a *attributesList) Remove(name string) bool {
+	curList := *a
+	for i, att := range curList {
+		if att.Key == name {
+			// Remove this element
+			res := append(curList[:i], curList[i+1:]...)
+			*a = res
+			return true
+		}
+	}
+	return false
+}
+
+func (a *attributesList) Set(name string, value string) bool {
+	curList := *a
+	for i, att := range curList {
+		if att.Key == name {
+			// Change this element
+			curList[i].Val = value
+			return true
+		}
+	}
+	// No existing element with that name - create a new one
+	res := append(curList, html.Attribute{Key: name, Val: value})
+	*a = res
+	return false
+}
+
 /*
 A templateInstruction provides a render method that can output part of a template given the current renderContext.
 */
@@ -249,16 +279,24 @@ func (d *renderCondition) render(rc *renderContext) error {
 }
 
 type renderStartTag struct {
+	// tagName is the name of the start tag
 	tagName []byte
 	// contentStructure is true if the content should be treated as structure rather than text
-	contentStructure     bool
-	contentExpression    string
-	originalAttributes   []html.Attribute
-	attributesExpression string
-	replaceCommand       bool
-	endTagIndex          int
-	omitTagExpression    string
-	voidElement          bool
+	contentStructure bool
+	// contentExpression holds the TALES expression to be evaluated if the content of the tag is to be changed
+	contentExpression string
+	// originalAttributes holds a copy of the original attributes assocaited with the start tag
+	originalAttributes []html.Attribute
+	// attributeExpression holds the list of TALES expressions to be evaluated (i.e. tal:attributes)
+	attributeExpression []html.Attribute
+	// If replaceCommand is true then the element is replaced entirely (i.e. tal:replace)
+	replaceCommand bool
+	// endTagIndex holds the location of where the corresponding renderEndTag is in the template instructions
+	endTagIndex int
+	// omitTagExpression is TALES expression associated with tal:omit-tag
+	omitTagExpression string
+	// voidElement is true if this HTML tag should not have an end tag (e.g. <img>)
+	voidElement bool
 }
 
 func (d *renderStartTag) String() string {
@@ -290,9 +328,43 @@ func (d *renderStartTag) render(rc *renderContext) error {
 
 	rc.buffer.reset()
 	if contentValue == Default || (!d.replaceCommand && !omitTagFlag) {
+		// We are going to write out a start tag, so it's worth evaluating any tal:attribute values at this point.
+		var attributes attributesList
+		if len(d.attributeExpression) == 0 {
+			// No tal:attributes - just use the original values.
+			attributes = d.originalAttributes
+		} else {
+			// Start by taking a copy of the original attributes
+			attributes = append(attributes, d.originalAttributes...)
+			// Now evaluate each tal:attribute and see what needs to be done.
+			for _, talAtt := range d.attributeExpression {
+				attValue := rc.talesContext.evaluate(talAtt.Val)
+				if attValue == None {
+					// Need to remove this attribute from the list.
+					attributes.Remove(talAtt.Key)
+				} else if attValue != Default {
+					// Over-ride the value
+					// If it's a boolean attribute, use the expression to determine what to do.
+					_, booleanAtt := htmlBooleanAttributes[talAtt.Key]
+					if booleanAtt {
+						if trueOrFalse(attValue) {
+							// True boolean attributes get the value of their name
+							attributes.Set(talAtt.Key, talAtt.Key)
+						} else {
+							// We remove the attribute
+							attributes.Remove(talAtt.Key)
+						}
+					} else {
+						// Normal attribute - just set to the string value.
+						attributes.Set(talAtt.Key, fmt.Sprint(attValue))
+					}
+				}
+			}
+		}
+
 		rc.buffer.appendString("<")
 		rc.buffer.append(d.tagName)
-		for _, att := range d.originalAttributes {
+		for _, att := range attributes {
 			rc.buffer.appendString(" ")
 			rc.buffer.appendString(att.Key)
 			rc.buffer.appendString("=\"")

@@ -101,7 +101,7 @@ var talCommandProperties = map[string]struct {
 	"tal:repeat":     {2, talRepeatStart},
 	"tal:content":    {3, talContentStart},
 	"tal:replace":    {4, talReplaceStart},
-	"tal:attributes": {5, unimplementedCommand},
+	"tal:attributes": {5, talAttributesStart},
 	"tal:omit-tag":   {6, talOmitTagStart},
 }
 
@@ -126,7 +126,7 @@ func (s talAttributes) Less(i, j int) bool {
 	return iPriority < jPriority
 }
 
-func splitDefineArguments(value string) []string {
+func splitTalArguments(value string) []string {
 	parts := strings.Split(value, ";")
 	var results []string
 	var candidate string
@@ -157,13 +157,21 @@ func splitDefineArguments(value string) []string {
 	return results
 }
 
-func unimplementedCommand(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
-	state.template.addRenderInstruction([]byte("Unimplemented tal command."))
+func talAttributesStart(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
+	definitionList := splitTalArguments(talValue)
+	for _, definition := range definitionList {
+		actualDef := strings.Split(definition, " ")
+		if len(actualDef) == 2 {
+			state.talStartTag.attributeExpression = append(state.talStartTag.attributeExpression, html.Attribute{Key: actualDef[0], Val: actualDef[1]})
+		} else {
+			return state.error(ErrExpressionMissing)
+		}
+	}
 	return nil
 }
 
 func talDefineStart(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
-	definitionList := splitDefineArguments(talValue)
+	definitionList := splitTalArguments(talValue)
 	for _, definition := range definitionList {
 		if strings.HasPrefix(definition, "local ") && len(definition) > 6 {
 			actualDef := strings.Split(definition[6:], " ")

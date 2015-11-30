@@ -11,7 +11,7 @@ var debug RenderConfig = RenderDebugLogging(log.Printf)
 
 func TestSplitDefineArguments(t *testing.T) {
 	testStr := "local one;global two;local three;;four;global five"
-	res := splitDefineArguments(testStr)
+	res := splitTalArguments(testStr)
 	expected := []string{"local one", "global two", "local three;four", "global five"}
 	if len(res) != len(expected) {
 		t.Errorf("String split resulted in %v not %v\n", res, expected)
@@ -340,6 +340,100 @@ func TestTalDefineGlobalAndLocalKeyword(t *testing.T) {
 		}{"One", "Two"},
 		`<body><p tal:define="global avar Value;local bvar V2"><h1 tal:content="avar"></h1><h2 tal:content="bvar"></h2></p><b tal:content="avar"></b><i tal:content="bvar"></i></body>`,
 		`<body><p><h1>One</h1><h2>Two</h2></p><b>One</b><i></i></body>`,
+	})
+}
+
+func TestTalAttributesNew(t *testing.T) {
+	runTest(t, talTest{
+		struct {
+			Value interface{}
+			V2    interface{}
+		}{"One", "Two"},
+		`<body><h1 tal:attributes="href V2">Test</h1></body>`,
+		`<body><h1 href="Two">Test</h1></body>`,
+	})
+}
+
+func TestTalAttributesAdditional(t *testing.T) {
+	runTest(t, talTest{
+		struct {
+			Value interface{}
+			V2    interface{}
+		}{"One", "Two"},
+		`<body><h1 class="class-one" id="#1" tal:attributes="href V2">Test</h1></body>`,
+		`<body><h1 class="class-one" id="#1" href="Two">Test</h1></body>`,
+	})
+}
+
+func TestTalAttributesRemove(t *testing.T) {
+	runTest(t, talTest{
+		struct {
+			Value interface{}
+			V2    interface{}
+		}{"One", "Two"},
+		`<body><h1 class="class-one" id="#1" tal:attributes="class None">Test</h1></body>`,
+		`<body><h1 id="#1">Test</h1></body>`,
+	})
+}
+
+func TestTalAttributesDefault(t *testing.T) {
+	runTest(t, talTest{
+		struct {
+			Value interface{}
+			V2    interface{}
+			V3    interface{}
+		}{"One", "Two", Default},
+		`<body><h1 class="class-one" id="#1" tal:attributes="class V3">Test</h1></body>`,
+		`<body><h1 class="class-one" id="#1">Test</h1></body>`,
+	})
+}
+
+func TestTalAttributesMany(t *testing.T) {
+	runTest(t, talTest{
+		struct {
+			Value interface{}
+			V2    interface{}
+			V3    interface{}
+		}{"One", "Two", Default},
+		`<body><h1 class="class-one" id="#1" tal:attributes="class V3;id v2;href Value">Test</h1></body>`,
+		`<body><h1 class="class-one" id="Two" href="One">Test</h1></body>`,
+	})
+}
+
+func TestTalAttributesWithContent(t *testing.T) {
+	runTest(t, talTest{
+		struct {
+			Value interface{}
+			V2    interface{}
+			V3    interface{}
+		}{"One", "Two", Default},
+		`<body><h1 class="class-one" id="#1" tal:attributes="class V3;id v2;href Value" tal:content="Value">Test</h1></body>`,
+		`<body><h1 class="class-one" id="Two" href="One">One</h1></body>`,
+	})
+}
+
+func TestTalAttributesWithRepeat(t *testing.T) {
+	runTest(t, talTest{
+		struct {
+			Value []interface{}
+		}{
+			[]interface{}{"One", "Two", Default, "Three", None, "Four"},
+		},
+		`<body><ul><li tal:repeat="num Value" tal:attributes="id num" id="default-num">Test</li></ul></body>`,
+		`<body><ul><li id="One">Test</li><li id="Two">Test</li><li id="default-num">Test</li><li id="Three">Test</li><li>Test</li><li id="Four">Test</li></ul></body>`,
+	})
+}
+
+func TestTalAttributesBoolean(t *testing.T) {
+	runTest(t, talTest{
+		struct {
+			Value interface{}
+			V2    interface{}
+			V3    interface{}
+			V4    interface{}
+		}{"One", "Two", true, false},
+		`<body><h1 tal:attributes="checked V3;default V4" tal:content="Value">Test</h1></body>`,
+		`<body><h1 checked="checked">One</h1></body>`,
 	})
 }
 
