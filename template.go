@@ -53,6 +53,16 @@ func (a *attributesList) Set(name string, value string) bool {
 	return false
 }
 
+func (a *attributesList) Get(name string) interface{} {
+	curList := *a
+	for _, att := range curList {
+		if att.Key == name {
+			return att.Val
+		}
+	}
+	return None
+}
+
 /*
 A templateInstruction provides a render method that can output part of a template given the current renderContext.
 */
@@ -104,10 +114,12 @@ type defineVariable struct {
 	global bool
 	// expression is the value to set the varaible to at runtime
 	expression string
+	// originalAttributes contains the non-TAL attributes of the original template
+	originalAttributes attributesList
 }
 
 func (d *defineVariable) render(rc *renderContext) error {
-	contextValue := rc.talesContext.evaluate(d.expression)
+	contextValue := rc.talesContext.evaluate(d.expression, d.originalAttributes)
 	if d.global {
 		rc.talesContext.globalVariables.SetValue(d.name, contextValue)
 	} else {
@@ -148,6 +160,8 @@ type renderRepeat struct {
 	condition   string
 	endTagIndex int
 	repeatId    int
+	// originalAttributes contains the non-TAL attributes of the original template
+	originalAttributes attributesList
 }
 
 /*
@@ -166,7 +180,7 @@ func (d *renderRepeat) render(rc *renderContext) error {
 
 	var contentValue interface{} = None
 	if d.condition != "" {
-		contentValue = rc.talesContext.evaluate(d.condition)
+		contentValue = rc.talesContext.evaluate(d.condition, d.originalAttributes)
 	}
 
 	if contentValue == Default {
@@ -262,12 +276,14 @@ func (d *renderData) String() string {
 type renderCondition struct {
 	condition   string
 	endTagIndex int
+	// originalAttributes contains the non-TAL attributes of the original template
+	originalAttributes attributesList
 }
 
 func (d *renderCondition) render(rc *renderContext) error {
 	var contentValue interface{} = None
 	if d.condition != "" {
-		contentValue = rc.talesContext.evaluate(d.condition)
+		contentValue = rc.talesContext.evaluate(d.condition, d.originalAttributes)
 	}
 	if trueOrFalse(contentValue) {
 		// Carry on - nothing to do.
@@ -286,7 +302,7 @@ type renderStartTag struct {
 	// contentExpression holds the TALES expression to be evaluated if the content of the tag is to be changed
 	contentExpression string
 	// originalAttributes holds a copy of the original attributes assocaited with the start tag
-	originalAttributes []html.Attribute
+	originalAttributes attributesList
 	// attributeExpression holds the list of TALES expressions to be evaluated (i.e. tal:attributes)
 	attributeExpression []html.Attribute
 	// If replaceCommand is true then the element is replaced entirely (i.e. tal:replace)
@@ -310,7 +326,7 @@ func (d *renderStartTag) render(rc *renderContext) error {
 	// If tal:omit-tag has been used, always ensure that we have called addOmitTagFlag()
 	omitTagFlag := false
 	if d.omitTagExpression != "" {
-		omitTagValue := rc.talesContext.evaluate(d.omitTagExpression)
+		omitTagValue := rc.talesContext.evaluate(d.omitTagExpression, d.originalAttributes)
 		omitTagFlag = trueOrFalse(omitTagValue)
 		// Add this onto the context
 		rc.debug("Omit Tag Flag %v - Omit Tag Value %v - Void %v\n", omitTagFlag, omitTagValue, d.voidElement)
@@ -321,7 +337,7 @@ func (d *renderStartTag) render(rc *renderContext) error {
 
 	var contentValue interface{}
 	if d.contentExpression != "" {
-		contentValue = rc.talesContext.evaluate(d.contentExpression)
+		contentValue = rc.talesContext.evaluate(d.contentExpression, d.originalAttributes)
 	}
 
 	rc.debug("Start tag content is %v\n", contentValue)
@@ -338,7 +354,7 @@ func (d *renderStartTag) render(rc *renderContext) error {
 			attributes = append(attributes, d.originalAttributes...)
 			// Now evaluate each tal:attribute and see what needs to be done.
 			for _, talAtt := range d.attributeExpression {
-				attValue := rc.talesContext.evaluate(talAtt.Val)
+				attValue := rc.talesContext.evaluate(talAtt.Val, d.originalAttributes)
 				if attValue == None {
 					// Need to remove this attribute from the list.
 					attributes.Remove(talAtt.Key)

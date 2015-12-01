@@ -112,12 +112,13 @@ func newRepeatVariable(repeatID int, sequence interface{}) *repeatVariable {
 }
 
 type tales struct {
-	data            interface{}
-	dataValue       reflect.Value
-	localVariables  *variableContainer
-	globalVariables *variableContainer
-	repeatVariables *variableContainer
-	debug           LogFunc
+	data               interface{}
+	dataValue          reflect.Value
+	localVariables     *variableContainer
+	globalVariables    *variableContainer
+	repeatVariables    *variableContainer
+	debug              LogFunc
+	originalAttributes attributesList
 }
 
 var None interface{} = &struct{ Name string }{Name: "None"}
@@ -148,7 +149,13 @@ func isValueSequence(value interface{}) bool {
 	return a.Kind() == reflect.Slice
 }
 
-func (t *tales) evaluate(talesExpression string) interface{} {
+func (t *tales) evaluate(talesExpression string, originalAttributes attributesList) interface{} {
+	// Figure out what kind of expression we have
+	t.originalAttributes = originalAttributes
+	return t.evaluateExpression(talesExpression)
+}
+
+func (t *tales) evaluateExpression(talesExpression string) interface{} {
 	// Figure out what kind of expression we have
 	talesExpression = strings.TrimSpace(talesExpression)
 
@@ -191,12 +198,25 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 		return Default
 	}
 
+	if objectName == "attrs" {
+		// Looking for an original attribute value
+		if len(pathElements) < 2 {
+			// In case the template does something silly like: attrs |  string: No repeat, we should check and act on any remaining expressions
+			if endOfExpression > -1 {
+				return t.evaluateExpression(talesExpression[endOfExpression+1:])
+			}
+			// If this is the last expression being evaluated - return None
+			return None
+		}
+		return t.originalAttributes.Get(pathElements[1])
+	}
+
 	if objectName == "repeat" {
 		// Looking for a repeat variable
 		if len(pathElements) < 2 {
 			// In case the template does something silly like: repeat |  string: No repeat, we should check and act on any remaining expressions
 			if endOfExpression > -1 {
-				return t.evaluate(talesExpression[endOfExpression+1:])
+				return t.evaluateExpression(talesExpression[endOfExpression+1:])
 			}
 			// If this is the last expression being evaluated - return None
 			return None
@@ -216,7 +236,7 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 	if ok {
 		pathValue := t.resolvePathObject(value, pathElements[1:])
 		if pathValue == None && endOfExpression > -1 {
-			return t.evaluate(talesExpression[endOfExpression+1:])
+			return t.evaluateExpression(talesExpression[endOfExpression+1:])
 		}
 		return pathValue
 	}
@@ -226,7 +246,7 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 	if ok {
 		pathValue := t.resolvePathObject(value, pathElements[1:])
 		if pathValue == None && endOfExpression > -1 {
-			return t.evaluate(talesExpression[endOfExpression+1:])
+			return t.evaluateExpression(talesExpression[endOfExpression+1:])
 		}
 		return pathValue
 	}
@@ -234,7 +254,7 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 	// Try the user provided data
 	pathValue := t.resolvePathObject(t.data, pathElements)
 	if pathValue == None && endOfExpression > -1 {
-		return t.evaluate(talesExpression[endOfExpression+1:])
+		return t.evaluateExpression(talesExpression[endOfExpression+1:])
 	}
 	return pathValue
 }

@@ -259,6 +259,24 @@ func TestTalesRepeatRomanUpper(t *testing.T) {
 	})
 }
 
+func TestTalesOriginalAtts(t *testing.T) {
+	vals := make(map[string]interface{})
+	var value []int
+
+	for i := 0; i < 6; i++ {
+		value = append(value, i)
+	}
+
+	vals["a"] = value
+	vals["true"] = true
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><p tal:define="att1 attrs/class" class="TopClass" href="Old!"><b tal:content="att1">Start: </b><b href="New!" tal:replace="attrs/href"></b> </p></body></html>`,
+		`<html><body><p class="TopClass" href="Old!"><b>TopClass</b>New! </p></body></html>`,
+	})
+}
+
 type talesTest struct {
 	Context  interface{}
 	Template string

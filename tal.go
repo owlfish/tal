@@ -176,7 +176,7 @@ func talDefineStart(originalAttributes []html.Attribute, talValue string, state 
 		if strings.HasPrefix(definition, "local ") && len(definition) > 6 {
 			actualDef := strings.Split(definition[6:], " ")
 			if len(actualDef) == 2 {
-				state.template.addInstruction(&defineVariable{name: actualDef[0], global: false, expression: actualDef[1]})
+				state.template.addInstruction(&defineVariable{name: actualDef[0], global: false, expression: actualDef[1], originalAttributes: originalAttributes})
 				// Local variables need popping when the end tag is seen.
 				state.pushAction(getTalDefineEndAction(state.template))
 			} else {
@@ -185,7 +185,7 @@ func talDefineStart(originalAttributes []html.Attribute, talValue string, state 
 		} else if strings.HasPrefix(definition, "global ") && len(definition) > 7 {
 			actualDef := strings.Split(definition[7:], " ")
 			if len(actualDef) == 2 {
-				state.template.addInstruction(&defineVariable{name: actualDef[0], global: true, expression: actualDef[1]})
+				state.template.addInstruction(&defineVariable{name: actualDef[0], global: true, expression: actualDef[1], originalAttributes: originalAttributes})
 			} else {
 				return state.error(ErrExpressionMissing)
 			}
@@ -193,7 +193,7 @@ func talDefineStart(originalAttributes []html.Attribute, talValue string, state 
 			// Treat as a local variable defintion.
 			actualDef := strings.Split(definition, " ")
 			if len(actualDef) == 2 {
-				state.template.addInstruction(&defineVariable{name: actualDef[0], global: false, expression: actualDef[1]})
+				state.template.addInstruction(&defineVariable{name: actualDef[0], global: false, expression: actualDef[1], originalAttributes: originalAttributes})
 				// Local variables need popping when the end tag is seen.
 				state.pushAction(getTalDefineEndAction(state.template))
 			} else {
@@ -252,7 +252,7 @@ func talConditionStart(originalAttributes []html.Attribute, talValue string, sta
 	if len(talValue) == 0 {
 		return state.error(ErrExpressionMissing)
 	}
-	condition := renderCondition{condition: talValue}
+	condition := renderCondition{condition: talValue, originalAttributes: originalAttributes}
 	state.template.addInstruction(&condition)
 	state.pushAction(getTalConditionEndAction(state.template, &condition))
 	return nil
@@ -271,7 +271,7 @@ func talRepeatStart(originalAttributes []html.Attribute, talValue string, state 
 	if len(parts) != 2 {
 		return state.error(ErrExpressionMalformed)
 	}
-	repeat := renderRepeat{repeatName: parts[0], condition: parts[1], repeatId: state.nextId}
+	repeat := renderRepeat{repeatName: parts[0], condition: parts[1], repeatId: state.nextId, originalAttributes: originalAttributes}
 	state.nextId++
 	state.template.addInstruction(&repeat)
 	state.pushAction(getTalRepeatEndAction(state.template, &repeat, len(state.template.instructions)-1))
