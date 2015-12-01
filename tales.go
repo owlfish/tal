@@ -17,6 +17,87 @@ func (rv *repeatVariable) Index() int {
 	return rv.sequencePosition
 }
 
+func (rv *repeatVariable) Number() int {
+	return rv.sequencePosition + 1
+}
+
+func (rv *repeatVariable) Even() bool {
+	return rv.sequencePosition%2 == 0
+}
+
+func (rv *repeatVariable) Odd() bool {
+	return rv.sequencePosition%2 != 0
+}
+
+func (rv *repeatVariable) Start() bool {
+	return rv.sequencePosition == 0
+}
+
+func (rv *repeatVariable) End() bool {
+	return rv.sequencePosition == rv.sequenceLength-1
+}
+
+func (rv *repeatVariable) Length() int {
+	return rv.sequenceLength
+}
+
+func (rv *repeatVariable) Letter() string {
+	var result string
+	value := rv.sequencePosition
+
+	for value >= 0 {
+		thisColumn := value % 26
+		value = value / 26
+		value-- // Required because there is no zero in the letter sequence.
+		result = string('a'+thisColumn) + result
+	}
+	return result
+}
+
+func (rv *repeatVariable) LetterUpper() string {
+	return strings.ToUpper(rv.Letter())
+}
+
+func (rv *repeatVariable) Roman() string {
+	romanNumeralList := []struct {
+		numeral string
+		value   int
+	}{
+		{"m", 1000},
+		{"cm", 900},
+		{"d", 500},
+		{"cd", 400},
+		{"c", 100},
+		{"xc", 90},
+		{"l", 50},
+		{"xl", 40},
+		{"x", 10},
+		{"ix", 9},
+		{"v", 5},
+		{"iv", 4},
+		{"i", 1},
+	}
+
+	// Roman numbers only supported up to 4000
+	if rv.sequencePosition > 3999 {
+		return " "
+	}
+
+	number := rv.sequencePosition + 1
+	var result string
+	for _, roman := range romanNumeralList {
+		for number >= roman.value {
+			result += roman.numeral
+			number -= roman.value
+		}
+	}
+	return result
+}
+
+func (rv *repeatVariable) RomanUpper() string {
+	return strings.ToUpper(rv.Roman())
+}
+
 func (rv *repeatVariable) indexedValue() interface{} {
 	return rv.sequenceValue.Index(rv.sequencePosition).Interface()
 }
@@ -101,6 +182,15 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 	}
 
 	objectName := pathElements[0]
+
+	// Special values.
+	if objectName == "nothing" {
+		return None
+	}
+	if objectName == "default" {
+		return Default
+	}
+
 	if objectName == "repeat" {
 		// Looking for a repeat variable
 		if len(pathElements) < 2 {
