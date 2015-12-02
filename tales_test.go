@@ -35,7 +35,6 @@ func TestTalesDeepPaths(t *testing.T) {
 
 func TestTalesOrPaths(t *testing.T) {
 	vals := make(map[string]interface{})
-	vals["a"] = None
 	vals["b"] = "Hello"
 	vals["c"] = "World"
 
@@ -274,6 +273,231 @@ func TestTalesOriginalAtts(t *testing.T) {
 		vals,
 		`<html><body><p tal:define="att1 attrs/class" class="TopClass" href="Old!"><b tal:content="att1">Start: </b><b href="New!" tal:replace="attrs/href"></b> </p></body></html>`,
 		`<html><body><p class="TopClass" href="Old!"><b>TopClass</b>New! </p></body></html>`,
+	})
+}
+
+func TestTalesExists(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["b"] = "Hello"
+	vals["c"] = None
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><h1 tal:condition="exists: a">A</h1><h2 tal:condition="exists: b">B</h2><h3 tal:condition="exists:c">C</h3></body></html>`,
+		`<html><body><h2>B</h2><h3>C</h3></body></html>`,
+	})
+}
+
+func TestTalesNotExists(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["b"] = "Hello"
+	vals["c"] = None
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><h1 tal:condition="not: exists: a">A</h1><h2 tal:condition="not:exists: b">B</h2><h3 tal:condition="not:exists:c">C</h3></body></html>`,
+		`<html><body><h1>A</h1></body></html>`,
+	})
+}
+
+func TestTalesBoolean(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["zero"] = 0
+	vals["one"] = 1
+	vals["false"] = false
+	vals["true"] = true
+	vals["emptystring"] = ""
+	vals["fullstring"] = "1"
+	vals["emptyslice"] = []string{}
+	vals["fullslice"] = []string{"One"}
+	vals["nil"] = nil
+	vals["noneValue"] = None
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><b tal:condition="zero">Zero</b><b tal:condition="one">One</b><b tal:condition="false">False</b><b tal:condition="true">True</b>
+		<b tal:condition="emptystring">EmptyString</b><b tal:condition="fullstring">Full String</b><b tal:condition="emptyslice">Empty Slice</b>
+		<b tal:condition="fullslice">Full slice</b><b tal:condition="nil">nil</b><b tal:condition="nonevalue">None Value</b><b tal:condition="notfound">Not found</b></body></html>`,
+		`<html><body><b>One</b><b>True</b>
+		<b>Full String</b>
+		<b>Full slice</b></body></html>`,
+	})
+}
+
+func TestTalesNot(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["zero"] = 0
+	vals["one"] = 1
+	vals["false"] = false
+	vals["true"] = true
+	vals["emptystring"] = ""
+	vals["fullstring"] = "1"
+	vals["emptyslice"] = []string{}
+	vals["fullslice"] = []string{"One"}
+	vals["nil"] = nil
+	vals["noneValue"] = None
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><b tal:condition="not:zero">Zero</b><b tal:condition="not:one">One</b><b tal:condition="not:false">False</b><b tal:condition="not:true">True</b>
+		<b tal:condition="not:emptystring">EmptyString</b><b tal:condition="not:fullstring">Full String</b><b tal:condition="not:emptyslice">Empty Slice</b>
+		<b tal:condition="not:fullslice">Full slice</b><b tal:condition="not:nil">nil</b><b tal:condition="not:nonevalue">None Value</b><b tal:condition="not:notfound">Not found</b></body></html>`,
+		`<html><body><b>Zero</b><b>False</b>
+		<b>EmptyString</b><b>Empty Slice</b>
+		<b>nil</b><b>None Value</b><b>Not found</b></body></html>`,
+	})
+}
+
+func TestTalesAttrIndirect(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["attname"] = "href"
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><b href="Test Attribute" tal:content="attrs/?attname">Zero</b></body></html>`,
+		`<html><body><b href="Test Attribute">Test Attribute</b></body></html>`,
+	})
+}
+
+func TestTalesRepeatIndirect(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["counterType"] = "number"
+	vals["data"] = []string{"Value a", "Value b"}
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><p tal:repeat="item data" tal:content="repeat/item/?counterType"></p></body></html>`,
+		`<html><body><p>1</p><p>2</p></body></html>`,
+	})
+}
+
+func TestTalesPathIndirect(t *testing.T) {
+	type Person struct {
+		Name string
+	}
+
+	vals := make(map[string]interface{})
+	vals["PeopleProperty"] = "People"
+	vals["PeopleNameProperty"] = "Name"
+	data := make(map[string]interface{})
+	data["People"] = Person{Name: "Bill"}
+	vals["data"] = data
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><p tal:content="data/?PeopleProperty/?PeopleNameProperty"></p></body></html>`,
+		`<html><body><p>Bill</p></body></html>`,
+	})
+}
+
+func TestTalesStringPlain(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["One"] = "Hello"
+	vals["Two"] = "World"
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><p tal:content="string: Hello World"></p></body></html>`,
+		`<html><body><p>Hello World</p></body></html>`,
+	})
+}
+
+func TestTalesStringPlainEscaped(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["One"] = "Hello"
+	vals["Two"] = "World"
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><p tal:content="string: Hello $$World"></p></body></html>`,
+		`<html><body><p>Hello $World</p></body></html>`,
+	})
+}
+
+func TestTalesStringPlainEscapedEnd(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["One"] = "Hello"
+	vals["Two"] = "World"
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><p tal:content="string: Hello $$World$$"></p></body></html>`,
+		`<html><body><p>Hello $World$</p></body></html>`,
+	})
+}
+
+func TestTalesStringSingleVariable(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["One"] = "Hello"
+	vals["Two"] = "World"
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><p tal:content="string: $One"></p></body></html>`,
+		`<html><body><p>Hello</p></body></html>`,
+	})
+}
+
+func TestTalesStringDoubleVariable(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["One"] = "Hello"
+	vals["Two"] = "World"
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><p tal:content="string: $One and $Two"></p></body></html>`,
+		`<html><body><p>Hello and World</p></body></html>`,
+	})
+}
+
+func TestTalesStringDoubleVariableNoSpace(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["One"] = "Hello"
+	vals["Two"] = "World"
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><p tal:content="string: $One$Two"></p></body></html>`,
+		`<html><body><p>HelloWorld</p></body></html>`,
+	})
+}
+
+func TestTalesStringSinglePath(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["One"] = "Hello"
+	vals["Two"] = "World"
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><p tal:content="string: ${One}"></p></body></html>`,
+		`<html><body><p>Hello</p></body></html>`,
+	})
+}
+
+func TestTalesStringDeepSinglePath(t *testing.T) {
+	vals := make(map[string]interface{})
+	moreVals := make(map[string]interface{})
+	vals["One"] = moreVals
+	moreVals["Two"] = "World"
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><p tal:content="string: ${One/Two}"></p></body></html>`,
+		`<html><body><p>World</p></body></html>`,
+	})
+}
+
+func TestTalesStringMixed(t *testing.T) {
+	vals := make(map[string]interface{})
+	moreVals := make(map[string]interface{})
+	vals["One"] = moreVals
+	moreVals["Two"] = "World"
+	vals["News"] = "Just In"
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><p tal:content="string: $News at the ${One/Two}"></p></body></html>`,
+		`<html><body><p>Just In at the World</p></body></html>`,
 	})
 }
 

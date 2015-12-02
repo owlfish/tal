@@ -1,7 +1,9 @@
 package tal
 
 import (
+	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -121,12 +123,17 @@ type tales struct {
 	originalAttributes attributesList
 }
 
-var None interface{} = &struct{ Name string }{Name: "None"}
+// None is the nil value in TALES.
+var None interface{} = struct{ Name string }{"None"}
 
-var Default interface{} = &struct{ Name string }{Name: "Default"}
+// Default is a special value used by TAL to indicate that the default template content should be used in tal:content, etc.
+var Default interface{} = struct{ Name string }{"Default"}
+
+// notFound is returned internally during path resolution if a property can not be found.
+var notFound interface{} = struct{ Name string }{"Not found"}
 
 func trueOrFalse(value interface{}) bool {
-	if value == None || value == nil {
+	if value == None || value == nil || value == notFound {
 		return false
 	}
 	switch a := value.(type) {
@@ -140,6 +147,13 @@ func trueOrFalse(value interface{}) bool {
 		}
 	case bool:
 		return a
+	}
+	// Check whether the value is a sequence
+	reflectValue := reflect.Indirect(reflect.ValueOf(value))
+	if reflectValue.Kind() == reflect.Slice {
+		if reflectValue.Len() == 0 {
+			return false
+		}
 	}
 	return true
 }
@@ -160,17 +174,133 @@ func (t *tales) evaluateExpression(talesExpression string) interface{} {
 	talesExpression = strings.TrimSpace(talesExpression)
 
 	if strings.HasPrefix(talesExpression, "path:") {
-		return t.evaluatePath(talesExpression[5:])
+		value := t.evaluatePath(talesExpression[5:])
+		if value == notFound {
+			value = None
+		}
+		return value
 	} else if strings.HasPrefix(talesExpression, "string:") {
+		return t.evaluteStringExpression(talesExpression[7:])
+	} else if strings.HasPrefix(talesExpression, "exists:") {
+		// Exists applies to paths, not expressions.
+		value := t.evaluatePath(talesExpression[7:])
+		if value == notFound {
+			return false
+		}
+		return true
+	} else if strings.HasPrefix(talesExpression, "not:") {
+		// Not applies to expressions, not paths
+		value := t.evaluateExpression(talesExpression[4:])
+		return !trueOrFalse(value)
 	} else {
 		// No prefix - treat as a path expression.
-		return t.evaluatePath(talesExpression)
+		value := t.evaluatePath(talesExpression)
+		if value == notFound {
+			value = None
+		}
+		return value
 	}
 	return None
 }
 
+func (t *tales) evaluteStringExpression(expression string) string {
+	expression = strings.TrimSpace(expression)
+	chars := []rune(expression)
+	length := len(chars)
+	var output buffer = make(buffer, 0, len(chars)*2)
+	var position, handled int
+	var foundDollar, inBrackets bool
+	for position < length {
+		char := chars[position]
+		switch char {
+		case '$':
+			if foundDollar {
+				// We've found a second dollar - are they back to back?
+				if handled == position {
+					output.appendString("$")
+					foundDollar = false
+				} else {
+					// Treat as the end of a variable
+					value := t.evaluatePath(string(chars[handled:position]))
+					output.appendString(fmt.Sprint(value))
+					foundDollar = true
+				}
+				handled = position + 1
+			} else {
+				// First dollar - output any normal text so far
+				if handled < position-1 {
+					output.appendString(string(chars[handled:position]))
+				}
+				handled = position + 1
+				foundDollar = true
+			}
+		case ' ':
+			if foundDollar {
+				// End of the variable name - look it up.
+				value := t.evaluatePath(string(chars[handled:position]))
+				output.appendString(fmt.Sprint(value))
+				handled = position
+				foundDollar = false
+			}
+		case '{':
+			inBrackets = true
+		case '}':
+			if inBrackets {
+				value := t.evaluatePath(string(chars[handled+1 : position]))
+				output.appendString(fmt.Sprint(value))
+				handled = position + 1
+				inBrackets = false
+				foundDollar = false
+			}
+		}
+		position++
+	}
+	// See if we have any end of string terminated variables
+	if foundDollar {
+		// Last variable - expand it.
+		t.debug("String tales path looking for %v at end of loop\n", string(chars[handled:]))
+		value := t.evaluatePath(string(chars[handled:]))
+		output.appendString(fmt.Sprint(value))
+	} else {
+		// Finish off any remaining output
+		output.appendString(string(chars[handled:]))
+	}
+	return string(output)
+}
+
+/*
+expandPathSegment checks for variable path segments (?segment) and expands the variable if required.
+
+The result will contain the path segment to use after expansion.  If expansion fails then an empty string is returned.
+*/
+func (t *tales) expandPathSegment(segment string) (result string) {
+	if len(segment) < 2 {
+		// Not long enough to hold a variable
+		return segment
+	}
+	if segment[0] != '?' {
+		// Not a variable - return as-is
+		return segment
+	}
+	// segment is a variable reference - need to expand it
+	segmentValue := t.evaluatePath(segment[1:])
+	if segmentValue == None || segmentValue == Default || segmentValue == notFound {
+		return ""
+	}
+	switch a := segmentValue.(type) {
+	case string:
+		return a
+	case int:
+		// Cast to string
+		return strconv.Itoa(a)
+	}
+	return ""
+}
+
 func (t *tales) evaluatePath(talesExpression string) interface{} {
 	// Do we have alternative expressions to evaluate?
+	talesExpression = strings.TrimSpace(talesExpression)
+
 	endOfExpression := strings.Index(talesExpression, "|")
 	pathExpression := talesExpression
 
@@ -185,7 +315,7 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 	pathElements := strings.Split(pathExpression, "/")
 	if len(pathElements) == 0 {
 		// This should never happen
-		return None
+		return notFound
 	}
 
 	objectName := pathElements[0]
@@ -208,7 +338,11 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 			// If this is the last expression being evaluated - return None
 			return None
 		}
-		return t.originalAttributes.Get(pathElements[1])
+		expandedPathElement := t.expandPathSegment(pathElements[1])
+		if expandedPathElement == "" {
+			return notFound
+		}
+		return t.originalAttributes.Get(expandedPathElement)
 	}
 
 	if objectName == "repeat" {
@@ -221,12 +355,16 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 			// If this is the last expression being evaluated - return None
 			return None
 		}
-		value, ok := t.repeatVariables.GetValue(pathElements[1])
+		expandedPathElement := t.expandPathSegment(pathElements[1])
+		if expandedPathElement == "" {
+			return notFound
+		}
+		value, ok := t.repeatVariables.GetValue(expandedPathElement)
 		if ok {
 			t.debug("Found repeat variable %v - resolve remaining path parts %v\n", pathElements[1], pathElements[2:])
 		} else {
 			t.debug("Unable to find repeat variable %v - returning None\n", pathElements[1])
-			return None
+			return notFound
 		}
 		return t.resolvePathObject(value, pathElements[2:])
 	}
@@ -235,7 +373,7 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 	value, ok := t.localVariables.GetValue(objectName)
 	if ok {
 		pathValue := t.resolvePathObject(value, pathElements[1:])
-		if pathValue == None && endOfExpression > -1 {
+		if pathValue == notFound && endOfExpression > -1 {
 			return t.evaluateExpression(talesExpression[endOfExpression+1:])
 		}
 		return pathValue
@@ -245,7 +383,7 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 	value, ok = t.globalVariables.GetValue(objectName)
 	if ok {
 		pathValue := t.resolvePathObject(value, pathElements[1:])
-		if pathValue == None && endOfExpression > -1 {
+		if pathValue == notFound && endOfExpression > -1 {
 			return t.evaluateExpression(talesExpression[endOfExpression+1:])
 		}
 		return pathValue
@@ -253,7 +391,7 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 
 	// Try the user provided data
 	pathValue := t.resolvePathObject(t.data, pathElements)
-	if pathValue == None && endOfExpression > -1 {
+	if pathValue == notFound && endOfExpression > -1 {
 		return t.evaluateExpression(talesExpression[endOfExpression+1:])
 	}
 	return pathValue
@@ -262,8 +400,17 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 func (t *tales) resolvePathObject(value interface{}, path []string) interface{} {
 	candidate := value
 	for _, property := range path {
-		candidate = t.resolveObjectProperty(candidate, property)
+		propertyExpanded := t.expandPathSegment(property)
+		if propertyExpanded == "" {
+			return notFound
+		}
+		candidate = t.resolveObjectProperty(candidate, propertyExpanded)
+		if candidate == notFound {
+			// If the property can't be found - return it
+			return notFound
+		}
 		if candidate == None {
+			// If the candidate resolve to None there are no attributes, just return it
 			return None
 		}
 	}
@@ -282,7 +429,7 @@ func (t *tales) callMethod(data reflect.Value, goFieldName string) (result inter
 		}
 		return None
 	}
-	return nil
+	return notFound
 }
 
 func (t *tales) resolveObjectProperty(value interface{}, property string) interface{} {
@@ -299,7 +446,7 @@ func (t *tales) resolveObjectProperty(value interface{}, property string) interf
 			t.debug("TALES: Found value in map\n")
 			return mapResult.Interface()
 		}
-		return None
+		return notFound
 	case reflect.Struct:
 		// Lookup the value
 		// Go field names start with upper case to be exported
@@ -316,19 +463,21 @@ func (t *tales) resolveObjectProperty(value interface{}, property string) interf
 			// Start by looking for pointer methods.
 			if rawData != data {
 				result := t.callMethod(rawData, goFieldName)
-				if result != nil {
+				if result != notFound {
 					return result
 				}
 			}
 			// Now call value methods
 			result := t.callMethod(data, goFieldName)
-			if result != nil {
+			if result != notFound {
 				return result
 			}
 		}
-		return None
+		// Not a struct field or method - return not found
+		return notFound
 	}
-	return None
+	// Not a map or struct - return notFound
+	return notFound
 
 }
 

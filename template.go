@@ -60,7 +60,7 @@ func (a *attributesList) Get(name string) interface{} {
 			return att.Val
 		}
 	}
-	return None
+	return notFound
 }
 
 /*
