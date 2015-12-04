@@ -6,5 +6,5 @@ The tal library provides an implementation of TAL for Go.  This is in an early s
 
  * TAL - Fully implemented.
  * TALES - Fully implemented (there are no plans to implement python: and nocall:)
- * METAL - Not started.
+ * METAL - Fully implemented (more tests required - e.g. nesting)
 

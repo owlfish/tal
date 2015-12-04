@@ -9,8 +9,9 @@ type stackValue struct {
 }
 
 type variableContainer struct {
-	values map[string]interface{}
-	stack  []stackValue
+	values    map[string]interface{}
+	stack     []stackValue
+	saveStack []map[string]interface{}
 }
 
 /*
@@ -22,6 +23,33 @@ func newContainer() *variableContainer {
 		stack:  make([]stackValue, 0, 5),
 	}
 	return c
+}
+
+/*
+SaveAll takes a snapshot of the current state of all variables and stores it for later restoring.
+
+This is used for macros and fill slots that wish to preseve any global variables.
+*/
+func (c *variableContainer) SaveAll() {
+	newMap := make(map[string]interface{})
+	for k, v := range c.values {
+		newMap[k] = v
+	}
+	c.saveStack = append(c.saveStack, c.values)
+	c.values = newMap
+}
+
+/*
+RestoreAll rolls back to a previous snapshot created with SaveAll.
+*/
+func (c *variableContainer) RestoreAll() {
+	stackSize := len(c.saveStack)
+	if stackSize == 0 {
+		return
+	}
+	stackEntry := c.saveStack[stackSize-1]
+	c.saveStack = c.saveStack[:stackSize-1]
+	c.values = stackEntry
 }
 
 func (c *variableContainer) GetValue(name string) (interface{}, bool) {

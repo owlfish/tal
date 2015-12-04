@@ -70,6 +70,54 @@ type templateInstruction interface {
 	render(*renderContext) error
 }
 
+type defineSlot struct {
+	name         string
+	endTagOffset int
+}
+
+func (d *defineSlot) render(rc *renderContext) error {
+	// Is there a filling for this slot available?
+	slotFilling, ok := rc.slots[d.name]
+	if ok {
+		// Found a slot filling - substitute it
+		err := slotFilling.renderAsSubtemplate(rc.talesContext, rc.out, make(map[string]*Template), rc.config...)
+		// Rendered the macro - skip the default content.
+		rc.instructionPointer += d.endTagOffset
+		return err
+	}
+	// No slot filling - just output as normal
+	return nil
+}
+
+func (d *defineSlot) String() string {
+	return fmt.Sprintf("Define slot %v - end offset %v", d.name, d.endTagOffset)
+}
+
+type useMacro struct {
+	expression         string
+	originalAttributes attributesList
+	endTagOffset       int
+	filledSlots        map[string]*Template
+}
+
+func (u *useMacro) render(rc *renderContext) error {
+	contextValue := rc.talesContext.evaluate(u.expression, u.originalAttributes)
+
+	mv, ok := contextValue.(*Template)
+	if ok {
+		// Render the macro
+		err := mv.renderAsSubtemplate(rc.talesContext, rc.out, u.filledSlots, rc.config...)
+		// Rendered the macro - skip the default content.
+		rc.instructionPointer += u.endTagOffset
+		return err
+	}
+	return nil
+}
+
+func (u *useMacro) String() string {
+	return fmt.Sprintf("Use Macro %v", u.expression)
+}
+
 /*
 A renderEndTag is used to render the close tag of an HTML element that contains one or more TAL commands.
 */
@@ -156,10 +204,10 @@ func (d *removeLocalVariable) String() string {
 renderRepeat is the templateInstruction for repeating blocks of instructions under tal:repeat.
 */
 type renderRepeat struct {
-	repeatName  string
-	condition   string
-	endTagIndex int
-	repeatId    int
+	repeatName   string
+	condition    string
+	endTagOffset int
+	repeatId     int
 	// originalAttributes contains the non-TAL attributes of the original template
 	originalAttributes attributesList
 }
@@ -190,7 +238,7 @@ func (d *renderRepeat) render(rc *renderContext) error {
 
 	if !isValueSequence(contentValue) {
 		// Not a sequence, so remove from our flow.
-		rc.instructionPointer = d.endTagIndex
+		rc.instructionPointer += d.endTagOffset
 		return nil
 	}
 	// We have a sequenece, need to iterate over it.
@@ -204,16 +252,16 @@ func (d *renderRepeat) render(rc *renderContext) error {
 }
 
 func (d *renderRepeat) String() string {
-	return fmt.Sprintf("Repeat %v (condition %v) to index %v", d.repeatName, d.condition, d.endTagIndex)
+	return fmt.Sprintf("Repeat %v (condition %v) to index +%v", d.repeatName, d.condition, d.endTagOffset)
 }
 
 /*
 renderEndRepeat is the templateInstruction closing off a tal:repeat.
 */
 type renderEndRepeat struct {
-	repeatName       string
-	repeatId         int
-	repeatStartIndex int
+	repeatName        string
+	repeatId          int
+	repeatStartOffset int
 }
 
 /*
@@ -245,12 +293,12 @@ func (d *renderEndRepeat) render(rc *renderContext) error {
 	rc.talesContext.localVariables.SetValue(d.repeatName, repeatVar.indexedValue())
 
 	// Finally loop back around the start tag.
-	rc.instructionPointer = d.repeatStartIndex
+	rc.instructionPointer += d.repeatStartOffset
 	return nil
 }
 
 func (d *renderEndRepeat) String() string {
-	return fmt.Sprintf("END Repeat %v (id %v) start index %v", d.repeatName, d.repeatId, d.repeatStartIndex)
+	return fmt.Sprintf("END Repeat %v (id %v) start index %v", d.repeatName, d.repeatId, d.repeatStartOffset)
 }
 
 type renderData struct {
@@ -274,8 +322,8 @@ func (d *renderData) String() string {
 }
 
 type renderCondition struct {
-	condition   string
-	endTagIndex int
+	condition    string
+	endTagOffset int
 	// originalAttributes contains the non-TAL attributes of the original template
 	originalAttributes attributesList
 }
@@ -289,9 +337,13 @@ func (d *renderCondition) render(rc *renderContext) error {
 		// Carry on - nothing to do.
 		return nil
 	}
-	rc.instructionPointer = d.endTagIndex
+	rc.instructionPointer += d.endTagOffset
 
 	return nil
+}
+
+func (d *renderCondition) String() string {
+	return fmt.Sprintf("Condition %v to offset %v", d.condition, d.endTagOffset)
 }
 
 type renderStartTag struct {
@@ -307,8 +359,8 @@ type renderStartTag struct {
 	attributeExpression []html.Attribute
 	// If replaceCommand is true then the element is replaced entirely (i.e. tal:replace)
 	replaceCommand bool
-	// endTagIndex holds the location of where the corresponding renderEndTag is in the template instructions
-	endTagIndex int
+	// endTagOffset holds the relative location of where the corresponding renderEndTag is in the template instructions
+	endTagOffset int
 	// omitTagExpression is TALES expression associated with tal:omit-tag
 	omitTagExpression string
 	// voidElement is true if this HTML tag should not have an end tag (e.g. <img>)
@@ -316,7 +368,7 @@ type renderStartTag struct {
 }
 
 func (d *renderStartTag) String() string {
-	return fmt.Sprintf("<%v> start tag - contentStructure %v - contentExpression %v - omitTagExpression %v", string(d.tagName), d.contentStructure, d.contentExpression, d.omitTagExpression)
+	return fmt.Sprintf("<%v> start tag - contentStructure %v - contentExpression %v - omitTagExpression %v - endTagOffset %v", string(d.tagName), d.contentStructure, d.contentExpression, d.omitTagExpression, d.endTagOffset)
 }
 
 func (d *renderStartTag) render(rc *renderContext) error {
@@ -404,10 +456,10 @@ func (d *renderStartTag) render(rc *renderContext) error {
 	}
 
 	if d.replaceCommand {
-		rc.debug("Omit Tag is true, jumping to %v\n", d.endTagIndex)
-		rc.instructionPointer = d.endTagIndex
+		rc.debug("Omit Tag is true, jumping to +%v\n", d.endTagOffset)
+		rc.instructionPointer += d.endTagOffset
 	} else {
-		rc.instructionPointer = d.endTagIndex - 1
+		rc.instructionPointer += d.endTagOffset - 1
 	}
 	return nil
 }
@@ -427,6 +479,10 @@ type renderContext struct {
 	omitTagFlags []bool
 	// debug is the logger to use for debug messages
 	debug LogFunc
+	// original configuration options passed in
+	config []RenderConfig
+	// slots that have been filled in the template calling this one.
+	slots map[string]*Template
 }
 
 /*
@@ -455,6 +511,11 @@ func (rc *renderContext) addOmitTagFlag(flag bool) {
 
 type Template struct {
 	instructions []templateInstruction
+	macros       map[string]*Template
+}
+
+func newTemplate() *Template {
+	return &Template{macros: make(map[string]*Template)}
 }
 
 func (t *Template) String() string {
@@ -494,6 +555,7 @@ func (t *Template) Render(context interface{}, out io.Writer, config ...RenderCo
 		buffer:       make(buffer, 0, 100),
 		talesContext: newTalesContext(context),
 		debug:        defaultLogger,
+		config:       config,
 	}
 	for _, c := range config {
 		c(t, rc)
@@ -501,6 +563,39 @@ func (t *Template) Render(context interface{}, out io.Writer, config ...RenderCo
 	for rc.instructionPointer < len(t.instructions) {
 		instruction := t.instructions[rc.instructionPointer]
 		rc.debug("Executing instruction %v\n", instruction)
+		err := instruction.render(rc)
+		if err != nil {
+			return err
+		}
+		rc.instructionPointer++
+	}
+	return nil
+}
+
+func (t *Template) Macros() interface{} {
+	return t.macros
+}
+
+func (t *Template) renderAsSubtemplate(context *tales, out io.Writer, slots map[string]*Template, config ...RenderConfig) error {
+	rc := &renderContext{
+		template:     t,
+		out:          out,
+		buffer:       make(buffer, 0, 100),
+		talesContext: context,
+		debug:        defaultLogger,
+		config:       config,
+		slots:        slots,
+	}
+	for _, c := range config {
+		c(t, rc)
+	}
+	// Save global state
+	rc.talesContext.globalVariables.SaveAll()
+	defer rc.talesContext.globalVariables.RestoreAll()
+
+	for rc.instructionPointer < len(t.instructions) {
+		instruction := t.instructions[rc.instructionPointer]
+		rc.debug("Executing renderAsSubtemplate instruction %v\n", instruction)
 		err := instruction.render(rc)
 		if err != nil {
 			return err

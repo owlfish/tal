@@ -418,6 +418,13 @@ func (t *tales) resolvePathObject(value interface{}, path []string) interface{} 
 }
 
 func (t *tales) callMethod(data reflect.Value, goFieldName string) (result interface{}) {
+	// If calling the method panics, recover
+	defer func() {
+		if recover() != nil {
+			result = notFound
+		}
+	}()
+
 	method := data.MethodByName(goFieldName)
 	t.debug("Result of looking for method %v: %v\n", goFieldName, method)
 	if method.IsValid() {

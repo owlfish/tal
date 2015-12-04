@@ -15,6 +15,8 @@ func (err *CompileError) Error() string {
 	switch err.ErrorType {
 	case ErrUnexpectedCloseTag:
 		msg = "Unexpected Close Tag"
+	case ErrSlotOutsideMacro:
+		msg = "metal:fill-slot used outside of macro definition"
 	default:
 		msg = "Unexpected error"
 	}
@@ -26,6 +28,7 @@ const (
 	ErrUnknownTalCommand
 	ErrExpressionMalformed
 	ErrExpressionMissing
+	ErrSlotOutsideMacro
 )
 
 func newCompileError(errType int, lastToken []byte, nextData []byte) *CompileError {

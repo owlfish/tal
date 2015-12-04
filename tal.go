@@ -25,12 +25,13 @@ type tagInfo struct {
 }
 
 type compileState struct {
-	tagStack    []tagInfo
-	template    *Template
-	tokenizer   *html.Tokenizer
-	talStartTag *renderStartTag
-	talEndTag   *renderEndTag
-	nextId      int
+	tagStack     []tagInfo
+	template     *Template
+	tokenizer    *html.Tokenizer
+	talStartTag  *renderStartTag
+	talEndTag    *renderEndTag
+	nextId       int
+	currentMacro *useMacro
 }
 
 /*
@@ -41,9 +42,9 @@ func (state *compileState) addTag(tag []byte) {
 }
 
 /*
-pushAction associates an action to be taken when the tag is pop'd from the stack
+appendAction associates an action to be taken when the tag is pop'd from the stack
 */
-func (state *compileState) pushAction(action endActionFunc) {
+func (state *compileState) appendAction(action endActionFunc) {
 	state.tagStack[len(state.tagStack)-1].popActions = append(state.tagStack[len(state.tagStack)-1].popActions, action)
 }
 
@@ -96,13 +97,17 @@ var talCommandProperties = map[string]struct {
 	Priority    int
 	StartAction startActionFunc
 }{
-	"tal:define":     {0, talDefineStart},
-	"tal:condition":  {1, talConditionStart},
-	"tal:repeat":     {2, talRepeatStart},
-	"tal:content":    {3, talContentStart},
-	"tal:replace":    {4, talReplaceStart},
-	"tal:attributes": {5, talAttributesStart},
-	"tal:omit-tag":   {6, talOmitTagStart},
+	"metal:define-macro": {0, metalDefineMacroStart},
+	"metal:use-macro":    {1, metalUseMacroStart},
+	"metal:define-slot":  {2, metalDefineSlotStart},
+	"metal:fill-slot":    {3, metalFillSlotStart},
+	"tal:define":         {4, talDefineStart},
+	"tal:condition":      {5, talConditionStart},
+	"tal:repeat":         {6, talRepeatStart},
+	"tal:content":        {7, talContentStart},
+	"tal:replace":        {8, talReplaceStart},
+	"tal:attributes":     {9, talAttributesStart},
+	"tal:omit-tag":       {10, talOmitTagStart},
 }
 
 func talCommandPriority(command string) int {
@@ -157,6 +162,79 @@ func splitTalArguments(value string) []string {
 	return results
 }
 
+func metalDefineSlotStart(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
+	ds := &defineSlot{name: talValue}
+	state.template.addInstruction(ds)
+
+	state.appendAction(metalDefineSlotEndAction(state, ds))
+	return nil
+}
+
+func metalDefineSlotEndAction(state *compileState, ds *defineSlot) endActionFunc {
+	startPoint := len(state.template.instructions)
+
+	return func() {
+		ds.endTagOffset = len(state.template.instructions) - startPoint
+	}
+}
+
+func metalFillSlotStart(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
+	// Check that we are inside a macro
+	if state.currentMacro == nil {
+		return state.error(ErrSlotOutsideMacro)
+	}
+	// Defer to the end of the slot definition to register it
+	state.appendAction(metalFillSlotEnd(talValue, state))
+	return nil
+}
+
+func metalFillSlotEnd(name string, state *compileState) endActionFunc {
+	startPoint := len(state.template.instructions)
+	return func() {
+		slotTemplate := newTemplate()
+		slotTemplate.instructions = state.template.instructions[startPoint:]
+		state.currentMacro.filledSlots[name] = slotTemplate
+	}
+}
+
+func metalUseMacroStart(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
+	// Create a useMacro template instruction
+	um := &useMacro{expression: talValue, originalAttributes: originalAttributes, filledSlots: make(map[string]*Template)}
+	state.template.addInstruction(um)
+	// Add the end tag index when we know it.
+	state.appendAction(metalUseMacroEndAction(state, um))
+	return nil
+}
+
+func metalUseMacroEndAction(state *compileState, um *useMacro) endActionFunc {
+	umLocation := len(state.template.instructions)
+	// Record the current macro and keep the old one for restore
+	// This allows metal:fill-slot to find the current macro.
+	previousMacro := state.currentMacro
+	state.currentMacro = um
+	return func() {
+		um.endTagOffset = len(state.template.instructions) - umLocation
+		// Restore the previous macro - required for nested macros.
+		state.currentMacro = previousMacro
+	}
+}
+
+func metalDefineMacroStart(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
+	// Do all the work at the end.
+	state.appendAction(metalDefineMacroEndAction(state.template, talValue, len(state.template.instructions)))
+	return nil
+}
+
+func metalDefineMacroEndAction(t *Template, name string, startInstructionIndex int) endActionFunc {
+	return func() {
+		// Create a new template for the macro
+		// Contains all instructions from the start to the end last instruction created.
+		macroTemplate := newTemplate()
+		macroTemplate.instructions = t.instructions[startInstructionIndex:]
+		t.macros[name] = macroTemplate
+	}
+}
+
 func talAttributesStart(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
 	definitionList := splitTalArguments(talValue)
 	for _, definition := range definitionList {
@@ -178,7 +256,7 @@ func talDefineStart(originalAttributes []html.Attribute, talValue string, state 
 			if len(actualDef) == 2 {
 				state.template.addInstruction(&defineVariable{name: actualDef[0], global: false, expression: actualDef[1], originalAttributes: originalAttributes})
 				// Local variables need popping when the end tag is seen.
-				state.pushAction(getTalDefineEndAction(state.template))
+				state.appendAction(getTalDefineEndAction(state.template))
 			} else {
 				return state.error(ErrExpressionMissing)
 			}
@@ -195,7 +273,7 @@ func talDefineStart(originalAttributes []html.Attribute, talValue string, state 
 			if len(actualDef) == 2 {
 				state.template.addInstruction(&defineVariable{name: actualDef[0], global: false, expression: actualDef[1], originalAttributes: originalAttributes})
 				// Local variables need popping when the end tag is seen.
-				state.pushAction(getTalDefineEndAction(state.template))
+				state.appendAction(getTalDefineEndAction(state.template))
 			} else {
 				return state.error(ErrExpressionMissing)
 			}
@@ -254,15 +332,16 @@ func talConditionStart(originalAttributes []html.Attribute, talValue string, sta
 	}
 	condition := renderCondition{condition: talValue, originalAttributes: originalAttributes}
 	state.template.addInstruction(&condition)
-	state.pushAction(getTalConditionEndAction(state.template, &condition))
+	state.appendAction(getTalConditionEndAction(state.template, &condition))
 	return nil
 }
 
 func getTalConditionEndAction(t *Template, condition *renderCondition) endActionFunc {
+	startLocation := len(t.instructions)
 	return func() {
 		// This action is executed once the end tag is seen
 		// condition and state is captured inside this closure
-		condition.endTagIndex = len(t.instructions) - 1
+		condition.endTagOffset = len(t.instructions) - startLocation
 	}
 }
 
@@ -274,16 +353,16 @@ func talRepeatStart(originalAttributes []html.Attribute, talValue string, state 
 	repeat := renderRepeat{repeatName: parts[0], condition: parts[1], repeatId: state.nextId, originalAttributes: originalAttributes}
 	state.nextId++
 	state.template.addInstruction(&repeat)
-	state.pushAction(getTalRepeatEndAction(state.template, &repeat, len(state.template.instructions)-1))
+	state.appendAction(getTalRepeatEndAction(state.template, &repeat, len(state.template.instructions)-1))
 	return nil
 }
 
 func getTalRepeatEndAction(t *Template, repeat *renderRepeat, startRepeatIndex int) endActionFunc {
 	return func() {
 		// Let the start tag know where the end tag is.
-		repeat.endTagIndex = len(t.instructions) - 1
+		repeat.endTagOffset = len(t.instructions) - startRepeatIndex - 1
 		// Add a end of repeat instruction.
-		endRepeat := &renderEndRepeat{repeatName: repeat.repeatName, repeatId: repeat.repeatId, repeatStartIndex: startRepeatIndex}
+		endRepeat := &renderEndRepeat{repeatName: repeat.repeatName, repeatId: repeat.repeatId, repeatStartOffset: -1 * (repeat.endTagOffset + 1)}
 		t.addInstruction(endRepeat)
 	}
 }
@@ -315,9 +394,10 @@ This function is inserted into the start of the list of end actions, so all end 
 that the renderEndTag instruction has already been added to the template.
 */
 func getTalEndTagAction(currentStartTag *renderStartTag, currentEndTag *renderEndTag, t *Template) endActionFunc {
+	startLocation := len(t.instructions) - 1
 	return func() {
 		// This action is executed once the end tag is seen
-		currentStartTag.endTagIndex = len(t.instructions)
+		currentStartTag.endTagOffset = len(t.instructions) - startLocation
 
 		// Now add the end tag if appropriate
 		if !currentStartTag.voidElement {
@@ -328,7 +408,7 @@ func getTalEndTagAction(currentStartTag *renderStartTag, currentEndTag *renderEn
 
 func CompileTemplate(in io.Reader) (template *Template, err error) {
 	tokenizer := html.NewTokenizer(in)
-	template = &Template{}
+	template = newTemplate()
 	state := &compileState{template: template, tokenizer: tokenizer}
 
 	for {
@@ -371,7 +451,7 @@ func CompileTemplate(in io.Reader) (template *Template, err error) {
 				val = make([]byte, len(rawval))
 				copy(val, rawval)
 				att := html.Attribute{Key: string(key), Val: string(val)}
-				if strings.HasPrefix(att.Key, "tal:") {
+				if strings.HasPrefix(att.Key, "tal:") || strings.HasPrefix(att.Key, "metal:") {
 					talAtts = append(talAtts, att)
 				} else {
 					originalAtts = append(originalAtts, att)
@@ -394,7 +474,7 @@ func CompileTemplate(in io.Reader) (template *Template, err error) {
 				// This is done via an action so that we can use different logic for close tags that have tal commands
 				// tagName is captured by the closure
 				if !htmlVoidElements[string(tagName)] {
-					state.pushAction(getPlainEndTagAction(template, tagName))
+					state.appendAction(getPlainEndTagAction(template, tagName))
 				}
 				break
 			}

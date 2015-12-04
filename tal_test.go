@@ -449,6 +449,7 @@ func runTest(t *testing.T, test talTest, cfg ...RenderConfig) {
 		t.Errorf("Error compiling template: %v\n", err)
 		return
 	}
+	//log.Printf("Template: %v\n", temp)
 
 	resultBuffer := &bytes.Buffer{}
 	err = temp.Render(test.Context, resultBuffer, cfg...)

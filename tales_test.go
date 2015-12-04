@@ -501,6 +501,19 @@ func TestTalesStringMixed(t *testing.T) {
 	})
 }
 
+func TestTalesBadMethods(t *testing.T) {
+	vals := make(map[string]interface{})
+	otherTemplate, _ := CompileTemplate(strings.NewReader("<html><h1>Test</h1></html>"))
+	vals["temp"] = otherTemplate
+
+	// Test whether calling Render method on the template in TALES suppresses the panic.
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><p tal:content="temp/Render"></p></body></html>`,
+		`<html><body><p></p></body></html>`,
+	})
+}
+
 type talesTest struct {
 	Context  interface{}
 	Template string
@@ -525,7 +538,7 @@ func runTalesTest(t *testing.T, test talesTest, cfg ...RenderConfig) {
 	resultStr := resultBuffer.String()
 
 	if resultStr != test.Expected {
-		t.Errorf("Expected output: \n%v\nActual output: \n%v\nFrom template: \n%v\nCompiled into: \n%v\n", test.Expected, resultStr, test.Template, temp.String())
+		t.Errorf("Expected output: \n%v\nActual output: \n%v\nFrom template: \n%v\nCompiled into: \n%v\nWith Context: \n%v\n", test.Expected, resultStr, test.Template, temp.String(), test.Context)
 		return
 	}
 }
