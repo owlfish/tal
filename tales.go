@@ -123,17 +123,20 @@ type tales struct {
 	originalAttributes attributesList
 }
 
-// None is the nil value in TALES.
-var None interface{} = struct{ Name string }{"None"}
+/*
+Default is a special value used by TAL to indicate that the default template content should be used in tal:content, etc.
 
-// Default is a special value used by TAL to indicate that the default template content should be used in tal:content, etc.
+Use the top level TALES variable "default" for the default value in a path.
+
+For None use the path "nothing" and in Go use nil.
+*/
 var Default interface{} = struct{ Name string }{"Default"}
 
 // notFound is returned internally during path resolution if a property can not be found.
 var notFound interface{} = struct{ Name string }{"Not found"}
 
 func trueOrFalse(value interface{}) bool {
-	if value == None || value == nil || value == notFound {
+	if value == nil || value == notFound {
 		return false
 	}
 	switch a := value.(type) {
@@ -166,7 +169,9 @@ func isValueSequence(value interface{}) bool {
 func (t *tales) evaluate(talesExpression string, originalAttributes attributesList) interface{} {
 	// Figure out what kind of expression we have
 	t.originalAttributes = originalAttributes
-	return t.evaluateExpression(talesExpression)
+	result := t.evaluateExpression(talesExpression)
+	t.debug("TALES evaluated %v to value %v\n", talesExpression, result)
+	return result
 }
 
 func (t *tales) evaluateExpression(talesExpression string) interface{} {
@@ -176,7 +181,7 @@ func (t *tales) evaluateExpression(talesExpression string) interface{} {
 	if strings.HasPrefix(talesExpression, "path:") {
 		value := t.evaluatePath(talesExpression[5:])
 		if value == notFound {
-			value = None
+			value = nil
 		}
 		return value
 	} else if strings.HasPrefix(talesExpression, "string:") {
@@ -196,11 +201,11 @@ func (t *tales) evaluateExpression(talesExpression string) interface{} {
 		// No prefix - treat as a path expression.
 		value := t.evaluatePath(talesExpression)
 		if value == notFound {
-			value = None
+			value = nil
 		}
 		return value
 	}
-	return None
+	return nil
 }
 
 func (t *tales) evaluteStringExpression(expression string) string {
@@ -284,7 +289,7 @@ func (t *tales) expandPathSegment(segment string) (result string) {
 	}
 	// segment is a variable reference - need to expand it
 	segmentValue := t.evaluatePath(segment[1:])
-	if segmentValue == None || segmentValue == Default || segmentValue == notFound {
+	if segmentValue == nil || segmentValue == Default || segmentValue == notFound {
 		return ""
 	}
 	switch a := segmentValue.(type) {
@@ -322,7 +327,7 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 
 	// Special values.
 	if objectName == "nothing" {
-		return None
+		return nil
 	}
 	if objectName == "default" {
 		return Default
@@ -336,7 +341,7 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 				return t.evaluateExpression(talesExpression[endOfExpression+1:])
 			}
 			// If this is the last expression being evaluated - return None
-			return None
+			return nil
 		}
 		expandedPathElement := t.expandPathSegment(pathElements[1])
 		if expandedPathElement == "" {
@@ -353,7 +358,7 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 				return t.evaluateExpression(talesExpression[endOfExpression+1:])
 			}
 			// If this is the last expression being evaluated - return None
-			return None
+			return nil
 		}
 		expandedPathElement := t.expandPathSegment(pathElements[1])
 		if expandedPathElement == "" {
@@ -363,7 +368,7 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 		if ok {
 			t.debug("Found repeat variable %v - resolve remaining path parts %v\n", pathElements[1], pathElements[2:])
 		} else {
-			t.debug("Unable to find repeat variable %v - returning None\n", pathElements[1])
+			t.debug("Unable to find repeat variable %v - returning not found\n", pathElements[1])
 			return notFound
 		}
 		return t.resolvePathObject(value, pathElements[2:])
@@ -409,9 +414,9 @@ func (t *tales) resolvePathObject(value interface{}, path []string) interface{} 
 			// If the property can't be found - return it
 			return notFound
 		}
-		if candidate == None {
+		if candidate == nil {
 			// If the candidate resolve to None there are no attributes, just return it
-			return None
+			return nil
 		}
 	}
 	return candidate
@@ -434,7 +439,7 @@ func (t *tales) callMethod(data reflect.Value, goFieldName string) (result inter
 		if len(results) > 0 {
 			return results[0].Interface()
 		}
-		return None
+		return nil
 	}
 	return notFound
 }

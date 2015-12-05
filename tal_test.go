@@ -62,7 +62,7 @@ func TestTalReplaceNoneValue(t *testing.T) {
 	runTest(t, talTest{
 		struct {
 			ContextValue interface{}
-		}{None},
+		}{nil},
 		`<body><h1>Test <b tal:replace="ContextValue" class="test" id="one">plan <a>at html</a></b> with an attribute <img src="test.png"></h1></body>`,
 		`<body><h1>Test  with an attribute <img src="test.png"></h1></body>`,
 	})
@@ -126,7 +126,7 @@ func TestTalContentNoneValue(t *testing.T) {
 	runTest(t, talTest{
 		struct {
 			ContextValue interface{}
-		}{None},
+		}{nil},
 		`<body><h1>Test <b tal:content="ContextValue" class="test" id="one">plan <a>at html</a></b> with an attribute <img src="test.png"></h1></body>`,
 		`<body><h1>Test <b class="test" id="one"></b> with an attribute <img src="test.png"></h1></body>`,
 	})
@@ -417,7 +417,7 @@ func TestTalAttributesWithRepeat(t *testing.T) {
 		struct {
 			Value []interface{}
 		}{
-			[]interface{}{"One", "Two", Default, "Three", None, "Four"},
+			[]interface{}{"One", "Two", Default, "Three", nil, "Four"},
 		},
 		`<body><ul><li tal:repeat="num Value" tal:attributes="id num" id="default-num">Test</li></ul></body>`,
 		`<body><ul><li id="One">Test</li><li id="Two">Test</li><li id="default-num">Test</li><li id="Three">Test</li><li>Test</li><li id="Four">Test</li></ul></body>`,

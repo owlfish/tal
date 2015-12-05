@@ -226,7 +226,7 @@ func (d *renderRepeat) render(rc *renderContext) error {
 		}
 	}
 
-	var contentValue interface{} = None
+	var contentValue interface{} = nil
 	if d.condition != "" {
 		contentValue = rc.talesContext.evaluate(d.condition, d.originalAttributes)
 	}
@@ -329,7 +329,7 @@ type renderCondition struct {
 }
 
 func (d *renderCondition) render(rc *renderContext) error {
-	var contentValue interface{} = None
+	var contentValue interface{} = nil
 	if d.condition != "" {
 		contentValue = rc.talesContext.evaluate(d.condition, d.originalAttributes)
 	}
@@ -407,7 +407,7 @@ func (d *renderStartTag) render(rc *renderContext) error {
 			// Now evaluate each tal:attribute and see what needs to be done.
 			for _, talAtt := range d.attributeExpression {
 				attValue := rc.talesContext.evaluate(talAtt.Val, d.originalAttributes)
-				if attValue == None {
+				if attValue == nil {
 					// Need to remove this attribute from the list.
 					attributes.Remove(talAtt.Key)
 				} else if attValue != Default {
@@ -443,11 +443,11 @@ func (d *renderStartTag) render(rc *renderContext) error {
 		rc.out.Write(rc.buffer)
 	}
 
-	if contentValue == Default || contentValue == nil {
+	if contentValue == Default || d.contentExpression == "" {
 		return nil
 	}
 
-	if contentValue != None {
+	if contentValue != nil {
 		if d.contentStructure {
 			rc.out.Write([]byte(fmt.Sprint(contentValue)))
 		} else {

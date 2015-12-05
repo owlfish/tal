@@ -18,7 +18,7 @@ func TestTalesDeepPaths(t *testing.T) {
 	c := cT{
 		C: make(map[string]string),
 		D: Default,
-		N: None,
+		N: nil,
 	}
 	c.C["one"] = "two"
 	a := aT{
@@ -279,7 +279,7 @@ func TestTalesOriginalAtts(t *testing.T) {
 func TestTalesExists(t *testing.T) {
 	vals := make(map[string]interface{})
 	vals["b"] = "Hello"
-	vals["c"] = None
+	vals["c"] = nil
 
 	runTalesTest(t, talesTest{
 		vals,
@@ -291,7 +291,7 @@ func TestTalesExists(t *testing.T) {
 func TestTalesNotExists(t *testing.T) {
 	vals := make(map[string]interface{})
 	vals["b"] = "Hello"
-	vals["c"] = None
+	vals["c"] = nil
 
 	runTalesTest(t, talesTest{
 		vals,
@@ -311,7 +311,7 @@ func TestTalesBoolean(t *testing.T) {
 	vals["emptyslice"] = []string{}
 	vals["fullslice"] = []string{"One"}
 	vals["nil"] = nil
-	vals["noneValue"] = None
+	vals["noneValue"] = nil
 
 	runTalesTest(t, talesTest{
 		vals,
@@ -335,7 +335,7 @@ func TestTalesNot(t *testing.T) {
 	vals["emptyslice"] = []string{}
 	vals["fullslice"] = []string{"One"}
 	vals["nil"] = nil
-	vals["noneValue"] = None
+	vals["noneValue"] = nil
 
 	runTalesTest(t, talesTest{
 		vals,
