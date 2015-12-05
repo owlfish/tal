@@ -514,6 +514,43 @@ func TestTalesBadMethods(t *testing.T) {
 	})
 }
 
+func TestTalesFuncOnStruct(t *testing.T) {
+	vals := make(map[string]interface{})
+	type T struct {
+		A interface{}
+	}
+	f := func() string {
+		return "Test from func"
+	}
+	tv := T{A: f}
+	vals["temp"] = tv
+
+	// Test whether calling the function from a tales path works
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><p tal:content="temp/A"></p></body></html>`,
+		`<html><body><p>Test from func</p></body></html>`,
+	})
+}
+
+func TestTalesFuncInMap(t *testing.T) {
+	vals := make(map[string]interface{})
+	name := "Closure test"
+	f := func() func() string {
+		return func() string {
+			return name
+		}
+	}
+	vals["temp"] = f()
+
+	// Test whether calling the function from a tales path works
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><p tal:content="temp"></p></body></html>`,
+		`<html><body><p>Closure test</p></body></html>`,
+	})
+}
+
 type talesTest struct {
 	Context  interface{}
 	Template string

@@ -444,6 +444,22 @@ func (t *tales) callMethod(data reflect.Value, goFieldName string) (result inter
 	return notFound
 }
 
+func (t *tales) callFunc(data reflect.Value) (result interface{}) {
+	// If calling the function panics, recover
+	defer func() {
+		if recover() != nil {
+			result = notFound
+		}
+	}()
+
+	var callArgs []reflect.Value = make([]reflect.Value, 0, 0)
+	results := data.Call(callArgs)
+	if len(results) > 0 {
+		return results[0].Interface()
+	}
+	return nil
+}
+
 func (t *tales) resolveObjectProperty(value interface{}, property string) interface{} {
 	rawData := reflect.ValueOf(value)
 	data := reflect.Indirect(rawData)
@@ -456,7 +472,15 @@ func (t *tales) resolveObjectProperty(value interface{}, property string) interf
 		mapResult := data.MapIndex(propertyValue)
 		if mapResult.IsValid() {
 			t.debug("TALES: Found value in map\n")
-			return mapResult.Interface()
+			mapValue := mapResult.Interface()
+			// Look at the value
+			mapValueReflection := reflect.ValueOf(mapValue)
+
+			if mapValueReflection.Kind() == reflect.Func {
+				t.debug("Found function - calling it.\n")
+				return t.callFunc(mapValueReflection)
+			}
+			return mapValue
 		}
 		return notFound
 	case reflect.Struct:
@@ -465,11 +489,24 @@ func (t *tales) resolveObjectProperty(value interface{}, property string) interf
 		goFieldName := strings.ToUpper(property[:1]) + property[1:]
 		structField := data.FieldByName(goFieldName)
 		if structField.IsValid() {
-			t.debug("TALES: Found field in struct\n")
+			// Make it concerete if it's an interface
+			// if structField.Kind() == reflect.Interface {
+			// 	structField = reflect.ValueOf(structField)
+			// }
+			t.debug("TALES: Found field in struct - kind of %v\n", structField.Kind())
 			// Check that this is an exported field
 			if structType, _ := data.Type().FieldByName(goFieldName); structType.PkgPath == "" {
-				t.debug("TALES: Confirmed field in struct is exported\n")
-				return structField.Interface()
+				//t.debug("TALES: Confirmed field in struct is exported - it's kind is %v\n", structField.Kind())
+				// Get field value wrapped in an interface{}
+				structFieldInterface := structField.Interface()
+				// Now get the reflected value of this interface
+				structField = reflect.ValueOf(structFieldInterface)
+				t.debug("New field kind: %v\n", structField.Kind())
+				if structField.Kind() == reflect.Func {
+					t.debug("Found function - calling it.\n")
+					return t.callFunc(structField)
+				}
+				return structFieldInterface
 			}
 		} else {
 			// Start by looking for pointer methods.
