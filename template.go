@@ -77,10 +77,11 @@ type defineSlot struct {
 
 func (d *defineSlot) render(rc *renderContext) error {
 	// Is there a filling for this slot available?
-	slotFilling, ok := rc.slots[d.name]
+	slotFilling, ok := rc.slots.GetValue(d.name)
 	if ok {
+		slotFillingTemplate := slotFilling.(*Template)
 		// Found a slot filling - substitute it
-		err := slotFilling.renderAsSubtemplate(rc.talesContext, rc.out, make(map[string]*Template), rc.config...)
+		err := slotFillingTemplate.renderAsSubtemplate(rc.talesContext, rc.out, rc.slots, rc.config...)
 		// Rendered the macro - skip the default content.
 		rc.instructionPointer += d.endTagOffset
 		return err
@@ -105,8 +106,18 @@ func (u *useMacro) render(rc *renderContext) error {
 
 	mv, ok := contextValue.(*Template)
 	if ok {
+		// Save current state and add slots
+		rc.slots.SaveAll()
+		for k, v := range u.filledSlots {
+			rc.slots.SetValue(k, v)
+		}
+
 		// Render the macro
-		err := mv.renderAsSubtemplate(rc.talesContext, rc.out, u.filledSlots, rc.config...)
+		err := mv.renderAsSubtemplate(rc.talesContext, rc.out, rc.slots, rc.config...)
+
+		// Now restore the state of the slots before this.
+		rc.slots.RestoreAll()
+
 		// Rendered the macro - skip the default content.
 		rc.instructionPointer += u.endTagOffset
 		return err
@@ -482,7 +493,7 @@ type renderContext struct {
 	// original configuration options passed in
 	config []RenderConfig
 	// slots that have been filled in the template calling this one.
-	slots map[string]*Template
+	slots *variableContainer
 }
 
 /*
@@ -556,6 +567,7 @@ func (t *Template) Render(context interface{}, out io.Writer, config ...RenderCo
 		talesContext: newTalesContext(context),
 		debug:        defaultLogger,
 		config:       config,
+		slots:        newContainer(),
 	}
 	for _, c := range config {
 		c(t, rc)
@@ -576,7 +588,7 @@ func (t *Template) Macros() interface{} {
 	return t.macros
 }
 
-func (t *Template) renderAsSubtemplate(context *tales, out io.Writer, slots map[string]*Template, config ...RenderConfig) error {
+func (t *Template) renderAsSubtemplate(context *tales, out io.Writer, slots *variableContainer, config ...RenderConfig) error {
 	rc := &renderContext{
 		template:     t,
 		out:          out,
