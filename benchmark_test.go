@@ -152,3 +152,14 @@ func BenchmarkDeeplyNestedRepeatCompile(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkDeeplyNestedRepeatCompileGoTemplate provides a comparison point against which TAL can be measured
+func BenchmarkDeeplyNestedRepeatCompileGoTemplate(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_, err := template.New("name").Parse(goPerformanceTemplate)
+		if err != nil {
+			b.Errorf("Error compiling template: %v\n", err)
+			return
+		}
+	}
+}

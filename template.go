@@ -224,8 +224,8 @@ type renderRepeat struct {
 }
 
 /*
-TODO: Write render for renderRepeat
-*/
+
+ */
 func (d *renderRepeat) render(rc *renderContext) error {
 	// Check to see whether we are already doing a repeat sequence for this tag.
 	repeatVar, ok := rc.talesContext.repeatVariables.GetValue(d.repeatName)
@@ -276,8 +276,8 @@ type renderEndRepeat struct {
 }
 
 /*
-TODO: Write render for renderEndRepeat
-*/
+
+ */
 func (d *renderEndRepeat) render(rc *renderContext) error {
 	// Check to see whether we are doing a repeat sequence.
 	candidate, ok := rc.talesContext.repeatVariables.GetValue(d.repeatName)
@@ -383,9 +383,6 @@ func (d *renderStartTag) String() string {
 }
 
 func (d *renderStartTag) render(rc *renderContext) error {
-	// TODO - Evaluate content
-	// TODO - Evaluate attributes
-
 	// If tal:omit-tag has been used, always ensure that we have called addOmitTagFlag()
 	omitTagFlag := false
 	if d.omitTagExpression != "" {

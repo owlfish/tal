@@ -1,3 +1,4 @@
+// tal is a Go implementation of the TAL, TALES and METAL templating languages
 package tal
 
 import (
@@ -9,28 +10,68 @@ import (
 	"strings"
 )
 
+/*
+A LogFunc is a function that can be used for logging.  log.Printf is a LogFunc.
+*/
 type LogFunc func(fmt string, args ...interface{})
 
+// defaultLogger does nothing - just returns
 func defaultLogger(fmt string, args ...interface{}) {
-
 }
 
+/*
+An endActionFunc is executed when a tal element's end tag is seen.
+
+Multiple endActionFunc's can be associated with a given end tag, allowing
+multiple actions to be composed.
+*/
 type endActionFunc func()
 
+/*
+startActionFunc is executed when a tal command is seen in a start tag.
+
+Multiple startActionFunc's may be associated with a given start tag, allowing
+multiple tal commands to be composed.
+*/
 type startActionFunc func(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError
 
+/*
+tagInfo records the tag and slice of end actions to be executed when the end
+tag is seen.
+*/
 type tagInfo struct {
 	tag        []byte
 	popActions []endActionFunc
 }
 
+/*
+compileState holds the state of a particular compilation while underway.
+*/
 type compileState struct {
-	tagStack     []tagInfo
-	template     *Template
-	tokenizer    *html.Tokenizer
-	talStartTag  *renderStartTag
-	talEndTag    *renderEndTag
-	nextId       int
+	/*
+		tagStack is a LIFO slice of end tags and actions.
+		These are compared against as actual end tags are seen.
+	*/
+	tagStack []tagInfo
+	// template holds the pointer to the template being constucted.
+	template *Template
+	// tokenizer holds a reference to the HTML tokenizer being used.
+	tokenizer *html.Tokenizer
+	/*
+		talStartTag holds the start tag instruction that is being constructed.
+		Each startActionFunc and endActionFunc has an opportunity to modify the
+		values of the talStartTag.
+	*/
+	talStartTag *renderStartTag
+	/*
+		talEndTag holds the end tag instruction that is being constructed.
+		Each startActionFunc and endActionFunc has an opportunity to modify the
+		values of the talEndTag.
+	*/
+	talEndTag *renderEndTag
+	// nextId is used to create unique IDs for repeat actions.
+	nextId int
+	// currentMacro holds the last metal:use-macro command seen.
 	currentMacro *useMacro
 }
 
@@ -61,7 +102,7 @@ func (state *compileState) insertAction(action endActionFunc) {
 }
 
 /*
-popTag removes the tag from the stack and executes any deferred actions.
+popTag removes the tag from the stack and executes any end actions.
 
 popTag keeps removing tags until the one given is found, or no tags remain.
 */
@@ -88,10 +129,14 @@ func (state *compileState) error(errorType int) *CompileError {
 	return newCompileError(errorType, state.tokenizer.Raw(), state.tokenizer.Buffered())
 }
 
+// talAttributes are a slice of html.Attribute with helper methods for sorting.
 type talAttributes []html.Attribute
 
 /*
-talCommandProperties defines the priority order of tal commands and maps them to startActionFuncs
+talCommandProperties holds the command priorities and startActionFuncs.
+
+All tal and metal attribute commands are sorted by the Priority before being
+handled.  Each startActionFunc is executed in turn.
 */
 var talCommandProperties = map[string]struct {
 	Priority    int
@@ -110,6 +155,7 @@ var talCommandProperties = map[string]struct {
 	"tal:omit-tag":       {10, talOmitTagStart},
 }
 
+// talCommandPriority returns the priority of a command
 func talCommandPriority(command string) int {
 	properties, ok := talCommandProperties[command]
 	if !ok {
@@ -131,6 +177,12 @@ func (s talAttributes) Less(i, j int) bool {
 	return iPriority < jPriority
 }
 
+/*
+splitTalArguments returns a slice of ";" seperated commands.
+
+Semi-colons can be escaped using ";;"
+This is used for both tal:define and tal:attributes.
+*/
 func splitTalArguments(value string) []string {
 	parts := strings.Split(value, ";")
 	var results []string
@@ -162,6 +214,12 @@ func splitTalArguments(value string) []string {
 	return results
 }
 
+/*
+metalDefineSlotStart is used for metal:define-slot.
+
+A new defineSlot template instruction is created and metalDefineSlotEndAction
+is registered as an end action to calculate the offset to the end tag.
+*/
 func metalDefineSlotStart(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
 	ds := &defineSlot{name: talValue}
 	state.template.addInstruction(ds)
@@ -170,6 +228,11 @@ func metalDefineSlotStart(originalAttributes []html.Attribute, talValue string, 
 	return nil
 }
 
+/*
+metalDefineSlotEndAction is used for the end tag of a metal:define-slot.
+
+It calculates the offset from the defineSlot instruction to the end tag.
+*/
 func metalDefineSlotEndAction(state *compileState, ds *defineSlot) endActionFunc {
 	startPoint := len(state.template.instructions)
 
@@ -178,6 +241,13 @@ func metalDefineSlotEndAction(state *compileState, ds *defineSlot) endActionFunc
 	}
 }
 
+/*
+metalFillSlotStart is used for metal:fill-slot.
+
+A check is made to ensures that the fill-slot is nested inside a use-macro.
+
+metalFillSlotEnd is called to register an end action to do the work.
+*/
 func metalFillSlotStart(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
 	// Check that we are inside a macro
 	if state.currentMacro == nil {
@@ -188,6 +258,12 @@ func metalFillSlotStart(originalAttributes []html.Attribute, talValue string, st
 	return nil
 }
 
+/*
+metalFillSlotEnd is used for the end tag of a metal:fill-slot.
+
+It creates a new Template for the instructions contained within the fill-slot
+element and registers this with the given name in the current use-macro.
+*/
 func metalFillSlotEnd(name string, state *compileState) endActionFunc {
 	startPoint := len(state.template.instructions)
 	return func() {
@@ -197,6 +273,12 @@ func metalFillSlotEnd(name string, state *compileState) endActionFunc {
 	}
 }
 
+/*
+metalUseMacroStart is used for metal:use-macro.
+
+A useMacro template instruction is added to the template.
+metalUseMacroEndAction then completes the rest of the work.
+*/
 func metalUseMacroStart(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
 	// Create a useMacro template instruction
 	um := &useMacro{expression: talValue, originalAttributes: originalAttributes, filledSlots: make(map[string]*Template)}
@@ -206,6 +288,15 @@ func metalUseMacroStart(originalAttributes []html.Attribute, talValue string, st
 	return nil
 }
 
+/*
+metalUseMacroEndAction is used for the end tag of a metal:use-macro.
+
+It records the location of the newly created useMacro instruction, saves the
+existing currentMacro (in case of nesting) and sets currentMacro.
+
+The returned endActionFunc calculates the offset from the start of the useMacro
+and restores the previous value of currentMacro.
+*/
 func metalUseMacroEndAction(state *compileState, um *useMacro) endActionFunc {
 	umLocation := len(state.template.instructions)
 	// Record the current macro and keep the old one for restore
@@ -219,12 +310,24 @@ func metalUseMacroEndAction(state *compileState, um *useMacro) endActionFunc {
 	}
 }
 
+/*
+metalDefineMacroStart is used for metal:define-macro.
+
+All work is deferred to metalDefineMacroEndAction.
+*/
 func metalDefineMacroStart(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
 	// Do all the work at the end.
 	state.appendAction(metalDefineMacroEndAction(state.template, talValue, len(state.template.instructions)))
 	return nil
 }
 
+/*
+metalDefineMacroEndAction is used for the end tag of a metal:define-macro.
+
+A new template is created covering all instructions from the start of
+define-macro to the end of the element.  This template is then added under the
+given name into the map of macros.
+*/
 func metalDefineMacroEndAction(t *Template, name string, startInstructionIndex int) endActionFunc {
 	return func() {
 		// Create a new template for the macro
@@ -235,6 +338,12 @@ func metalDefineMacroEndAction(t *Template, name string, startInstructionIndex i
 	}
 }
 
+/*
+talAttributesStart is used for tal:attributes.
+
+All arguments are split and the resulting name / value pairs are appended to
+the startTag's attribute expression list.  No endAction is used.
+*/
 func talAttributesStart(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
 	definitionList := splitTalArguments(talValue)
 	for _, definition := range definitionList {
@@ -248,6 +357,14 @@ func talAttributesStart(originalAttributes []html.Attribute, talValue string, st
 	return nil
 }
 
+/*
+talDefineStart is used for tal:define.
+
+All arguments are split and local / global scope is determined.
+defineVariable template instructions are created for each variable defined
+and each local variable definition results in a endAction from
+getTalDefineEndAction being registered.
+*/
 func talDefineStart(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
 	definitionList := splitTalArguments(talValue)
 	for _, definition := range definitionList {
@@ -282,6 +399,12 @@ func talDefineStart(originalAttributes []html.Attribute, talValue string, state 
 	return nil
 }
 
+/*
+getTalDefineEndAction is used for the end tag of a tal:define.
+
+This is only used for local variables.  A new template instruction of
+removeLocalVariable is added to the template instruction list.
+*/
 func getTalDefineEndAction(t *Template) endActionFunc {
 	return func() {
 		// Add a local variable remove instruction.
@@ -289,6 +412,12 @@ func getTalDefineEndAction(t *Template) endActionFunc {
 	}
 }
 
+/*
+talReplaceStart is used for tal:replace.
+
+text / structure is determined and a values on the existing
+talStartTag are changed as required.  No endAction is used.
+*/
 func talReplaceStart(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
 	if len(talValue) == 0 {
 		return state.error(ErrExpressionMissing)
@@ -308,6 +437,12 @@ func talReplaceStart(originalAttributes []html.Attribute, talValue string, state
 	return nil
 }
 
+/*
+talContentStart is used for tal:content.
+
+text / structure is determined and a values on the existing
+talStartTag are changed as required.  No endAction is used.
+*/
 func talContentStart(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
 	if len(talValue) == 0 {
 		return state.error(ErrExpressionMissing)
@@ -326,6 +461,12 @@ func talContentStart(originalAttributes []html.Attribute, talValue string, state
 	return nil
 }
 
+/*
+talConditionStart is used for tal:condition.
+
+A new renderCondition template instruction is created.
+An end action from getTalConditionEndAction is registered.
+*/
 func talConditionStart(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
 	if len(talValue) == 0 {
 		return state.error(ErrExpressionMissing)
@@ -336,6 +477,12 @@ func talConditionStart(originalAttributes []html.Attribute, talValue string, sta
 	return nil
 }
 
+/*
+getTalConditionEndAction is used for the end tag of a tal:condition.
+
+The returned endActionFunc calculates the offset from the condition to the
+end tag.
+*/
 func getTalConditionEndAction(t *Template, condition *renderCondition) endActionFunc {
 	startLocation := len(t.instructions)
 	return func() {
@@ -345,6 +492,12 @@ func getTalConditionEndAction(t *Template, condition *renderCondition) endAction
 	}
 }
 
+/*
+talRepeatStart is used for tal:repeat.
+
+A new renderRepeat template instruction is created.
+An end action from getTalRepeatEndAction is registered.
+*/
 func talRepeatStart(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
 	parts := strings.Split(talValue, " ")
 	if len(parts) != 2 {
@@ -357,6 +510,12 @@ func talRepeatStart(originalAttributes []html.Attribute, talValue string, state 
 	return nil
 }
 
+/*
+getTalRepeatEndAction is used for the end tag of a tal:repeat.
+
+The offset from the renderRepeat instruction is calculated and a new
+renderEndRepeat template instruction is created to perform the loop.
+*/
 func getTalRepeatEndAction(t *Template, repeat *renderRepeat, startRepeatIndex int) endActionFunc {
 	return func() {
 		// Let the start tag know where the end tag is.
@@ -367,6 +526,12 @@ func getTalRepeatEndAction(t *Template, repeat *renderRepeat, startRepeatIndex i
 	}
 }
 
+/*
+talOmitTagStart is used for tal:omit.
+
+talStartTag is changed as required to implement omit-tag.
+No endAction is used.
+*/
 func talOmitTagStart(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
 	if len(talValue) == 0 {
 		return state.error(ErrExpressionMissing)
@@ -376,6 +541,12 @@ func talOmitTagStart(originalAttributes []html.Attribute, talValue string, state
 	return nil
 }
 
+/*
+getPlainEndTagAction is used for the end tags without tal or metal commands.
+
+Template.addRenderInstruction is used incase the render template instruction
+can be coallesed with a previous render command.
+*/
 func getPlainEndTagAction(t *Template, tagName []byte) endActionFunc {
 	return func() {
 		var d buffer
@@ -388,10 +559,12 @@ func getPlainEndTagAction(t *Template, tagName []byte) endActionFunc {
 }
 
 /*
-getTalEndTagAction returns an endAction that completes setting up the start tag and adds the end tag instruction.
+getTalEndTagAction returns an endAction that completes setting up the start tag
+and adds the end tag instruction.
 
-This function is inserted into the start of the list of end actions, so all end actions done after this need to consider
-that the renderEndTag instruction has already been added to the template.
+This function is inserted into the start of the list of end actions, so all
+end actions done after this need to consider that the renderEndTag instruction
+has already been added to the template.
 */
 func getTalEndTagAction(currentStartTag *renderStartTag, currentEndTag *renderEndTag, t *Template) endActionFunc {
 	startLocation := len(t.instructions) - 1
@@ -406,6 +579,12 @@ func getTalEndTagAction(currentStartTag *renderStartTag, currentEndTag *renderEn
 	}
 }
 
+/*
+CompileTemplate reads the template in and compiles it ready for execution.
+
+If a compilation error (rather than IO error) occurs, the returned error
+will be a CompileError object.
+*/
 func CompileTemplate(in io.Reader) (template *Template, err error) {
 	tokenizer := html.NewTokenizer(in)
 	template = newTemplate()

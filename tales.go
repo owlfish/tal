@@ -7,42 +7,62 @@ import (
 	"strings"
 )
 
+/*
+repeatVariable implements the tal repeat variable.
+
+There are some differences from the spec:
+
+1 - first and last grouping functions are not supported.
+
+2 - LetterUpper and RomanUpper are used instead of Letter and Roman
+*/
 type repeatVariable struct {
-	sequence         interface{}
+	// The sequence being itterated over
+	sequence interface{}
+	// The reflected value of the sequence value.
 	sequenceValue    reflect.Value
 	sequenceLength   int
 	sequencePosition int
-	repeatId         int
+	// repeatId is a unique ID for this template used to allow re-using repeat names
+	repeatId int
 }
 
+// Index returns the current position within the sequence, starting at 0.
 func (rv *repeatVariable) Index() int {
 	return rv.sequencePosition
 }
 
+// Number returns the current position within the sequence, starting at 1.
 func (rv *repeatVariable) Number() int {
 	return rv.sequencePosition + 1
 }
 
+// Even returns true if the current iteration is an even index
 func (rv *repeatVariable) Even() bool {
 	return rv.sequencePosition%2 == 0
 }
 
+// Even returns ture if the current iteration is an odd index
 func (rv *repeatVariable) Odd() bool {
 	return rv.sequencePosition%2 != 0
 }
 
+// Start returns true if this is the first iteration
 func (rv *repeatVariable) Start() bool {
 	return rv.sequencePosition == 0
 }
 
+// Start returns true if this is the last iteration
 func (rv *repeatVariable) End() bool {
 	return rv.sequencePosition == rv.sequenceLength-1
 }
 
+// Length returns the total number of iterations
 func (rv *repeatVariable) Length() int {
 	return rv.sequenceLength
 }
 
+// Letter returns a letter (a, b, etc) for the iteration
 func (rv *repeatVariable) Letter() string {
 	var result string
 	value := rv.sequencePosition
@@ -56,10 +76,12 @@ func (rv *repeatVariable) Letter() string {
 	return result
 }
 
+// LetterUpper returns the upper case version of Letter
 func (rv *repeatVariable) LetterUpper() string {
 	return strings.ToUpper(rv.Letter())
 }
 
+// Roman returns the Number as roman numerals.
 func (rv *repeatVariable) Roman() string {
 	romanNumeralList := []struct {
 		numeral string
@@ -96,14 +118,17 @@ func (rv *repeatVariable) Roman() string {
 	return result
 }
 
+// RomanUpper returns the upper case version of Roman
 func (rv *repeatVariable) RomanUpper() string {
 	return strings.ToUpper(rv.Roman())
 }
 
+// indexedValue returns the current value
 func (rv *repeatVariable) indexedValue() interface{} {
 	return rv.sequenceValue.Index(rv.sequencePosition).Interface()
 }
 
+// newRepeatVariable creates a new repeat variable.
 func newRepeatVariable(repeatID int, sequence interface{}) *repeatVariable {
 	rv := &repeatVariable{}
 	rv.sequence = sequence
@@ -113,13 +138,19 @@ func newRepeatVariable(repeatID int, sequence interface{}) *repeatVariable {
 	return rv
 }
 
+// tales holds the state used when evaluating tales expressions.
 type tales struct {
-	data               interface{}
-	dataValue          reflect.Value
-	localVariables     *variableContainer
-	globalVariables    *variableContainer
-	repeatVariables    *variableContainer
-	debug              LogFunc
+	// data holds the user provided data
+	data interface{}
+	// localVariables holds all currently defined local variables
+	localVariables *variableContainer
+	// globalVariables holds all currently defined global variables
+	globalVariables *variableContainer
+	// repeatVariables holds any defined repeat variables
+	repeatVariables *variableContainer
+	// debug holds the function to use for debug logging
+	debug LogFunc
+	// originalAttributes holds the attributes of the current element
 	originalAttributes attributesList
 }
 
@@ -135,6 +166,13 @@ var Default interface{} = struct{ Name string }{"Default"}
 // notFound is returned internally during path resolution if a property can not be found.
 var notFound interface{} = struct{ Name string }{"Not found"}
 
+/*
+trueOfFalse determines whether a TALES value is ture or false.
+
+Empty strings, integers and floats of 0 value, empty slices and false booleans are all false.
+
+Any other value is true.
+*/
 func trueOrFalse(value interface{}) bool {
 	if value == nil || value == notFound {
 		return false
@@ -145,6 +183,14 @@ func trueOrFalse(value interface{}) bool {
 			return false
 		}
 	case int:
+		if a == 0 {
+			return false
+		}
+	case float32:
+		if a == 0 {
+			return false
+		}
+	case float64:
 		if a == 0 {
 			return false
 		}
@@ -161,11 +207,19 @@ func trueOrFalse(value interface{}) bool {
 	return true
 }
 
+// isValueSequence returns true if the value can be used as a sequence, i.e is
+// a slice or an array.
 func isValueSequence(value interface{}) bool {
 	a := reflect.ValueOf(value)
-	return a.Kind() == reflect.Slice
+	if a.Kind() == reflect.Slice {
+		return true
+	}
+	return a.Kind() == reflect.Array
 }
 
+/*
+evaluate takes a TALES expression and returns it's result.
+*/
 func (t *tales) evaluate(talesExpression string, originalAttributes attributesList) interface{} {
 	// Figure out what kind of expression we have
 	t.originalAttributes = originalAttributes
@@ -174,6 +228,11 @@ func (t *tales) evaluate(talesExpression string, originalAttributes attributesLi
 	return result
 }
 
+/*
+evaluateExpression can be recursively called and evalutes a TALES expression.
+
+This is used to evaluate multiple | separated expressions.
+*/
 func (t *tales) evaluateExpression(talesExpression string) interface{} {
 	// Figure out what kind of expression we have
 	talesExpression = strings.TrimSpace(talesExpression)
@@ -208,6 +267,9 @@ func (t *tales) evaluateExpression(talesExpression string) interface{} {
 	return nil
 }
 
+/*
+evaluteStringExpression implements TALES string: expressions.
+*/
 func (t *tales) evaluteStringExpression(expression string) string {
 	expression = strings.TrimSpace(expression)
 	chars := []rune(expression)
@@ -302,6 +364,11 @@ func (t *tales) expandPathSegment(segment string) (result string) {
 	return ""
 }
 
+/*
+evaluatePath evaluates a path: or implied TALES path expression.
+
+The | operator is supported, triggering recursive calls to evaluateExpression.
+*/
 func (t *tales) evaluatePath(talesExpression string) interface{} {
 	// Do we have alternative expressions to evaluate?
 	talesExpression = strings.TrimSpace(talesExpression)
@@ -402,6 +469,13 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 	return pathValue
 }
 
+/*
+resolvePathObject takes an object and traverses the path to get it's property.
+
+The object will have been found in local, global or user data.  Properties
+will be traversed, including maps, structs, functions and methods to get to
+a final object.
+*/
 func (t *tales) resolvePathObject(value interface{}, path []string) interface{} {
 	candidate := value
 	for _, property := range path {
@@ -422,6 +496,8 @@ func (t *tales) resolvePathObject(value interface{}, path []string) interface{} 
 	return candidate
 }
 
+// callMethod attempts to call the given named property as a method.
+// A single return value is supported.
 func (t *tales) callMethod(data reflect.Value, goFieldName string) (result interface{}) {
 	// If calling the method panics, recover
 	defer func() {
@@ -444,6 +520,8 @@ func (t *tales) callMethod(data reflect.Value, goFieldName string) (result inter
 	return notFound
 }
 
+// callFunc attempts to call the function provided.
+// A single return value is supported.
 func (t *tales) callFunc(data reflect.Value) (result interface{}) {
 	// If calling the function panics, recover
 	defer func() {
@@ -460,6 +538,15 @@ func (t *tales) callFunc(data reflect.Value) (result interface{}) {
 	return nil
 }
 
+/*
+resolveObjectProperty takes a single value and returns a named property.
+
+For maps the property is treated as a key.  For structs the property has
+it's first letter made upper case (i.e. exported) and are looked for in
+fields and methods.
+
+Any func or method found will be called and it's value will be returned.
+*/
 func (t *tales) resolveObjectProperty(value interface{}, property string) interface{} {
 	rawData := reflect.ValueOf(value)
 	data := reflect.Indirect(rawData)
@@ -530,10 +617,10 @@ func (t *tales) resolveObjectProperty(value interface{}, property string) interf
 
 }
 
+// newTalesContext sets up a new tales object with the given user data.
 func newTalesContext(data interface{}) *tales {
 	t := &tales{
 		data:            data,
-		dataValue:       reflect.ValueOf(data),
 		localVariables:  newContainer(),
 		globalVariables: newContainer(),
 		repeatVariables: newContainer(),
