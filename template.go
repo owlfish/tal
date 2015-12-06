@@ -23,8 +23,10 @@ func RenderDebugLogging(logger LogFunc) RenderConfig {
 	}
 }
 
+// attributesList is used to hold attributes before rendering
 type attributesList []html.Attribute
 
+// Remove deletes the named attribute from the list
 func (a *attributesList) Remove(name string) bool {
 	curList := *a
 	for i, att := range curList {
@@ -38,6 +40,8 @@ func (a *attributesList) Remove(name string) bool {
 	return false
 }
 
+// Set updates or appends a new attribute with the given values
+// The returned bool is true if an update has been done.
 func (a *attributesList) Set(name string, value string) bool {
 	curList := *a
 	for i, att := range curList {
@@ -53,6 +57,7 @@ func (a *attributesList) Set(name string, value string) bool {
 	return false
 }
 
+// Get returns the named attribute, or notFound if not present.
 func (a *attributesList) Get(name string) interface{} {
 	curList := *a
 	for _, att := range curList {
@@ -64,17 +69,31 @@ func (a *attributesList) Get(name string) interface{} {
 }
 
 /*
-A templateInstruction provides a render method that can output part of a template given the current renderContext.
+A templateInstruction provides a render method that is called when the instruction is executed.
 */
 type templateInstruction interface {
+	// Render the instruction using the provided renderContext
 	render(*renderContext) error
 }
 
+/*
+defineSlot is a template instruction used for metal:define-slot.
+*/
 type defineSlot struct {
-	name         string
+	// name of the slot being defined
+	name string
+	// endTagOffset holds the distance to the end tag
 	endTagOffset int
 }
 
+/*
+render for a metal:define-slot looks in the current context to see if the slot
+has been filled.  If it has, the slot filling is rendered and it skips ahead to
+the end of the element scope.
+
+If no slot is defined nothing is done, it continues to render the default
+content of the slot.
+*/
 func (d *defineSlot) render(rc *renderContext) error {
 	// Is there a filling for this slot available?
 	slotFilling, ok := rc.slots.GetValue(d.name)
@@ -90,17 +109,33 @@ func (d *defineSlot) render(rc *renderContext) error {
 	return nil
 }
 
+// String returns a text description fo the instruction
 func (d *defineSlot) String() string {
 	return fmt.Sprintf("Define slot %v - end offset %v", d.name, d.endTagOffset)
 }
 
+/*
+useMacro is a template instruction used for metal:use-macro.
+*/
 type useMacro struct {
-	expression         string
+	// The TALES expression that should resolve into a macro
+	expression string
+	// originalAttributes are used during TALES expression resolution
 	originalAttributes attributesList
-	endTagOffset       int
-	filledSlots        map[string]*Template
+	// endTagOffset holds the distance to the end tag
+	endTagOffset int
+	// filledSlots holds the mapping between the name and template filling any
+	// slots in the macro to be used.
+	filledSlots map[string]*Template
 }
 
+/*
+render for a metal:use-macro evaluates the TALES expression and resolves it to
+a Template.  All existing slot definitions are saved on a stack (to allow
+nesting of macros) and the slots updated with any associated with this useMacro
+.  The macro is then rendered, the state of the slots restored and the rest
+of teh element content skipped.
+*/
 func (u *useMacro) render(rc *renderContext) error {
 	contextValue := rc.talesContext.evaluate(u.expression, u.originalAttributes)
 
@@ -125,6 +160,7 @@ func (u *useMacro) render(rc *renderContext) error {
 	return nil
 }
 
+// String returns a text description fo the instruction
 func (u *useMacro) String() string {
 	return fmt.Sprintf("Use Macro %v", u.expression)
 }
@@ -140,6 +176,13 @@ type renderEndTag struct {
 	checkOmitTagFlag bool
 }
 
+/*
+render for an end tag that contained one or more tal / metal commands.
+
+If a tal:omit-tag command was included in the opening tag, the resolved
+value of this is taken out of the context and used to determine whether
+it should be rendered.
+*/
 func (d *renderEndTag) render(rc *renderContext) error {
 	render := true
 	if d.checkOmitTagFlag {
@@ -159,6 +202,7 @@ func (d *renderEndTag) render(rc *renderContext) error {
 	return nil
 }
 
+// String returns a text description fo the instruction
 func (d *renderEndTag) String() string {
 	return fmt.Sprintf("</%v> omit flag test: %v", string(d.tagName), d.checkOmitTagFlag)
 }
@@ -177,6 +221,13 @@ type defineVariable struct {
 	originalAttributes attributesList
 }
 
+/*
+render for a tal:define command.
+
+If the variable is global it is set, if it is local it is added and the
+original value will be restored in the subsequent removeLocalVariable
+instruction.
+*/
 func (d *defineVariable) render(rc *renderContext) error {
 	contextValue := rc.talesContext.evaluate(d.expression, d.originalAttributes)
 	if d.global {
@@ -187,6 +238,7 @@ func (d *defineVariable) render(rc *renderContext) error {
 	return nil
 }
 
+// String returns a text description fo the instruction
 func (d *defineVariable) String() string {
 	typeOfVar := "local"
 	if d.global {
@@ -202,11 +254,18 @@ removeLocalVariable removes the most recently defined local variable.
 type removeLocalVariable struct {
 }
 
+/*
+render for removing a local tal:define variable.
+
+The last added local variable is removed, restoring the previous value if
+any.
+*/
 func (d *removeLocalVariable) render(rc *renderContext) error {
 	rc.talesContext.localVariables.RemoveValue()
 	return nil
 }
 
+// String returns a text description fo the instruction
 func (d *removeLocalVariable) String() string {
 	return "Remove Local Variable"
 }
@@ -215,17 +274,29 @@ func (d *removeLocalVariable) String() string {
 renderRepeat is the templateInstruction for repeating blocks of instructions under tal:repeat.
 */
 type renderRepeat struct {
-	repeatName   string
-	condition    string
+	// repeatName is the name used for the local and repeat variable
+	repeatName string
+	// condition is the TALES expression used for the repeat sequence
+	condition string
+	// endTagOffset holds the distance to the end tag
 	endTagOffset int
-	repeatId     int
+	// repeatId holds the unique ID for this repeat, allowing repeatNames to be reused.
+	repeatId int
 	// originalAttributes contains the non-TAL attributes of the original template
 	originalAttributes attributesList
 }
 
 /*
+render for starting a tal:repeat command.
 
- */
+A check is made to see if we are already in a loop by looking for a repeat
+variable with this name and then verifying the repeatId's match.
+
+If not in a loop already, the TALES expression is evaluated and checked to
+make sure it is a sequence.  Then a local and repeat variable are established.
+
+If the value is not a sequence type then the instruction jumps to the end tag.
+*/
 func (d *renderRepeat) render(rc *renderContext) error {
 	// Check to see whether we are already doing a repeat sequence for this tag.
 	repeatVar, ok := rc.talesContext.repeatVariables.GetValue(d.repeatName)
@@ -262,6 +333,7 @@ func (d *renderRepeat) render(rc *renderContext) error {
 	return nil
 }
 
+// String returns a text description fo the instruction
 func (d *renderRepeat) String() string {
 	return fmt.Sprintf("Repeat %v (condition %v) to index +%v", d.repeatName, d.condition, d.endTagOffset)
 }
@@ -270,14 +342,24 @@ func (d *renderRepeat) String() string {
 renderEndRepeat is the templateInstruction closing off a tal:repeat.
 */
 type renderEndRepeat struct {
-	repeatName        string
-	repeatId          int
+	// repeatName is the name used for the local and repeat variable
+	repeatName string
+	// repeatId holds the unique ID for this repeat, allowing repeatNames to be reused.
+	repeatId int
+	// repeatStartOffset holds the distance back to the start of the repeat.
 	repeatStartOffset int
 }
 
 /*
+render for ending a loop of a tal:repeat command.
 
- */
+A check is made to confirm that we are already in a loop by looking for a repeat
+variable with this name and then verifying the repeatId's match.
+
+The sequence position is advanced.  If this takes it beyond the length of the
+sequence, the repeat and local variables are removed.  Otherwise the
+instruction pointer is set to the start of the repeat loop.
+*/
 func (d *renderEndRepeat) render(rc *renderContext) error {
 	// Check to see whether we are doing a repeat sequence.
 	candidate, ok := rc.talesContext.repeatVariables.GetValue(d.repeatName)
@@ -308,14 +390,21 @@ func (d *renderEndRepeat) render(rc *renderContext) error {
 	return nil
 }
 
+// String returns a text description fo the instruction
 func (d *renderEndRepeat) String() string {
 	return fmt.Sprintf("END Repeat %v (id %v) start index %v", d.repeatName, d.repeatId, d.repeatStartOffset)
 }
 
+// renderData is a template instruction that outputs a slice of bytes
+// This is used by text, comments and tags that do not have commands on them.
 type renderData struct {
+	// data contains the bytes to be written out
 	data []byte
 }
 
+/*
+render for plain text output.
+*/
 func (d *renderData) render(rc *renderContext) error {
 	_, err := rc.out.Write(d.data)
 	if err != nil {
@@ -324,6 +413,7 @@ func (d *renderData) render(rc *renderContext) error {
 	return nil
 }
 
+// String returns a text description fo the instruction
 func (d *renderData) String() string {
 	dataStr := string(d.data)
 	if len(dataStr) > 60 {
@@ -332,13 +422,26 @@ func (d *renderData) String() string {
 	return dataStr
 }
 
+/*
+renderCondition is the templateInstruction for tal:condition.
+*/
 type renderCondition struct {
-	condition    string
+	// condition holds the TALES expression to be evaluated.
+	condition string
+	// endTagOffset holds the distance to the end tag
 	endTagOffset int
 	// originalAttributes contains the non-TAL attributes of the original template
 	originalAttributes attributesList
 }
 
+/*
+render for a tal:condition command.
+
+The condition TALES expression is evaluated and turned into true / false.
+
+If the value is true, nothing else is done.  If false, execution jumps
+to after the end tag.
+*/
 func (d *renderCondition) render(rc *renderContext) error {
 	var contentValue interface{} = nil
 	if d.condition != "" {
@@ -353,35 +456,64 @@ func (d *renderCondition) render(rc *renderContext) error {
 	return nil
 }
 
+// String returns a text description fo the instruction
 func (d *renderCondition) String() string {
 	return fmt.Sprintf("Condition %v to offset %v", d.condition, d.endTagOffset)
 }
 
+/*
+renderStartTag is the templateInstruction for any tag with commands.
+*/
 type renderStartTag struct {
 	// tagName is the name of the start tag
 	tagName []byte
-	// contentStructure is true if the content should be treated as structure rather than text
+	// contentStructure is true if the content should be treated as structure
+	// rather than text
 	contentStructure bool
-	// contentExpression holds the TALES expression to be evaluated if the content of the tag is to be changed
+	// contentExpression holds the TALES expression to be evaluated if the
+	// content of the tag is to be changed
 	contentExpression string
-	// originalAttributes holds a copy of the original attributes assocaited with the start tag
+	// originalAttributes holds a copy of the original attributes assocaited
+	// with the start tag
 	originalAttributes attributesList
-	// attributeExpression holds the list of TALES expressions to be evaluated (i.e. tal:attributes)
+	// attributeExpression holds the list of TALES expressions to be evaluated
+	// (i.e. tal:attributes)
 	attributeExpression []html.Attribute
-	// If replaceCommand is true then the element is replaced entirely (i.e. tal:replace)
+	// If replaceCommand is true then the element is replaced entirely
+	// (i.e. tal:replace)
 	replaceCommand bool
-	// endTagOffset holds the relative location of where the corresponding renderEndTag is in the template instructions
+	// endTagOffset holds the relative location of where the corresponding
+	// renderEndTag is in the template instructions
 	endTagOffset int
 	// omitTagExpression is TALES expression associated with tal:omit-tag
 	omitTagExpression string
-	// voidElement is true if this HTML tag should not have an end tag (e.g. <img>)
+	// voidElement is true if this HTML tag should not have an end tag
+	// (e.g. <img>)
 	voidElement bool
 }
 
+// String returns a text description fo the instruction
 func (d *renderStartTag) String() string {
 	return fmt.Sprintf("<%v> start tag - contentStructure %v - contentExpression %v - omitTagExpression %v - endTagOffset %v", string(d.tagName), d.contentStructure, d.contentExpression, d.omitTagExpression, d.endTagOffset)
 }
 
+/*
+render for a start tag containing commands.
+
+If a tal:omit-tag TALES expression is present, it is evaluated.
+If the element is not a void element (e.g. <img>), the resulting
+true or false is stored in the render context for the end tag to pickup.
+
+If a contentExpression (from tal:content or tal:replace) is present, it is
+evaluated.  If it resolves to Default or it is a tal:content command and
+tal:omit-tag is missing or is false, the start tag is rendered.
+
+Start tag rendering checks whether there are any attribute expressions.  If
+there are, these are evaluated and the effective attributes updated.
+
+If there is a tal:replace command that did not evaluate to Default, execution
+jumps to the end tag.
+*/
 func (d *renderStartTag) render(rc *renderContext) error {
 	// If tal:omit-tag has been used, always ensure that we have called addOmitTagFlag()
 	omitTagFlag := false
@@ -472,6 +604,9 @@ func (d *renderStartTag) render(rc *renderContext) error {
 	return nil
 }
 
+/*
+renderContext holds the current state of a template rendering.
+*/
 type renderContext struct {
 	// template holders the reference to the template being executed.
 	template *Template
@@ -517,15 +652,23 @@ func (rc *renderContext) addOmitTagFlag(flag bool) {
 	rc.omitTagFlags = append(rc.omitTagFlags, flag)
 }
 
+/*
+Template holds the compiled version of a TAL template.
+
+Once the Template has been compiled it is immutable and can be used by multiple
+goroutines simultaneously.
+*/
 type Template struct {
 	instructions []templateInstruction
 	macros       map[string]*Template
 }
 
+// newTemplate creates a new empty template.
 func newTemplate() *Template {
 	return &Template{macros: make(map[string]*Template)}
 }
 
+// String creates a full textual description of the compiled template.
 func (t *Template) String() string {
 	buf := make(buffer, 0, 100)
 	for index, instr := range t.instructions {
@@ -537,6 +680,12 @@ func (t *Template) String() string {
 	return string(buf)
 }
 
+/*
+addRenderInstruction is used to add plain text to the template for output.
+
+If the last instruction in the template is a renderData, it's data is appended
+to with the new data.  If not a new renderData instruction is created.
+*/
 func (t *Template) addRenderInstruction(data []byte) {
 	// If there are already instructions, see if they can be merged
 	if len(t.instructions) > 0 {
@@ -552,10 +701,18 @@ func (t *Template) addRenderInstruction(data []byte) {
 	t.instructions = append(t.instructions, &renderData{data})
 }
 
+// addInstruction appends the given instruction to the template
 func (t *Template) addInstruction(instruction templateInstruction) {
 	t.instructions = append(t.instructions, instruction)
 }
 
+/*
+Render a template contents with the given context to the io.Writer.
+
+The Context object should be either a struct or a map with string keys.
+
+A RenderConfig option can be provided to set debug logging.
+*/
 func (t *Template) Render(context interface{}, out io.Writer, config ...RenderConfig) error {
 	rc := &renderContext{
 		template:     t,
@@ -581,10 +738,16 @@ func (t *Template) Render(context interface{}, out io.Writer, config ...RenderCo
 	return nil
 }
 
+/*
+Macros returns an object that contains the macros defined in this template.
+
+This is used to expose these macros into the context for execution.
+*/
 func (t *Template) Macros() interface{} {
 	return t.macros
 }
 
+// renderAsSubtemplate is used to render a template into ane existing render.
 func (t *Template) renderAsSubtemplate(context *tales, out io.Writer, slots *variableContainer, config ...RenderConfig) error {
 	rc := &renderContext{
 		template:     t,
@@ -614,6 +777,7 @@ func (t *Template) renderAsSubtemplate(context *tales, out io.Writer, slots *var
 	return nil
 }
 
+// buffer is a helper type for building byte sequences.
 type buffer []byte
 
 func (b *buffer) append(newb []byte) {
