@@ -563,7 +563,7 @@ func (t *Template) Render(context interface{}, out io.Writer, config ...RenderCo
 	rc := &renderContext{
 		template:     t,
 		out:          out,
-		buffer:       make(buffer, 0, 100),
+		buffer:       make(buffer, 0, 1024),
 		talesContext: newTalesContext(context),
 		debug:        defaultLogger,
 		config:       config,
@@ -592,7 +592,7 @@ func (t *Template) renderAsSubtemplate(context *tales, out io.Writer, slots *var
 	rc := &renderContext{
 		template:     t,
 		out:          out,
-		buffer:       make(buffer, 0, 100),
+		buffer:       make(buffer, 0, 1024),
 		talesContext: context,
 		debug:        defaultLogger,
 		config:       config,
