@@ -1,4 +1,3 @@
-// tal is a Go implementation of the TAL, TALES and METAL templating languages
 package tal
 
 import (
@@ -53,7 +52,7 @@ type compileState struct {
 		These are compared against as actual end tags are seen.
 	*/
 	tagStack []tagInfo
-	// template holds the pointer to the template being constucted.
+	// template holds the pointer to the template being constructed.
 	template *Template
 	// tokenizer holds a reference to the HTML tokenizer being used.
 	tokenizer *html.Tokenizer
@@ -178,7 +177,7 @@ func (s talAttributes) Less(i, j int) bool {
 }
 
 /*
-splitTalArguments returns a slice of ";" seperated commands.
+splitTalArguments returns a slice of ";" separated commands.
 
 Semi-colons can be escaped using ";;"
 This is used for both tal:define and tal:attributes.
@@ -544,8 +543,8 @@ func talOmitTagStart(originalAttributes []html.Attribute, talValue string, state
 /*
 getPlainEndTagAction is used for the end tags without tal or metal commands.
 
-Template.addRenderInstruction is used incase the render template instruction
-can be coallesed with a previous render command.
+Template.addRenderInstruction is used in case the render template instruction
+can be coalesced with a previous render command.
 */
 func getPlainEndTagAction(t *Template, tagName []byte) endActionFunc {
 	return func() {

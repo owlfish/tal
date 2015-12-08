@@ -562,6 +562,24 @@ func TestTalesFuncInMap(t *testing.T) {
 	})
 }
 
+func TestTalesStuctPointer(t *testing.T) {
+	type person struct {
+		Name string
+		Age  int
+	}
+
+	vals := make(map[string]interface{})
+	vals["Bob"] = &person{"Bobby", 12}
+	vals["Mary"] = person{"Mary", 13}
+
+	// Test whether calling the function from a tales path works
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><p tal:content="Bob/Name"></p><p tal:content="Mary/Age"></p></body></html>`,
+		`<html><body><p>Bobby</p><p>13</p></body></html>`,
+	}, debug)
+}
+
 type talesTest struct {
 	Context  interface{}
 	Template string

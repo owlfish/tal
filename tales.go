@@ -17,7 +17,7 @@ There are some differences from the spec:
 2 - LetterUpper and RomanUpper are used instead of Letter and Roman
 */
 type repeatVariable struct {
-	// The sequence being itterated over
+	// The sequence being iterated over
 	sequence interface{}
 	// The reflected value of the sequence value.
 	sequenceValue    reflect.Value
@@ -167,7 +167,7 @@ var Default interface{} = struct{ Name string }{"Default"}
 var notFound interface{} = struct{ Name string }{"Not found"}
 
 /*
-trueOfFalse determines whether a TALES value is ture or false.
+trueOfFalse determines whether a TALES value is true or false.
 
 Empty strings, integers and floats of 0 value, empty slices and false booleans are all false.
 
@@ -229,7 +229,7 @@ func (t *tales) evaluate(talesExpression string, originalAttributes attributesLi
 }
 
 /*
-evaluateExpression can be recursively called and evalutes a TALES expression.
+evaluateExpression can be recursively called and evaluates a TALES expression.
 
 This is used to evaluate multiple | separated expressions.
 */

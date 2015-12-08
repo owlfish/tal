@@ -134,7 +134,7 @@ render for a metal:use-macro evaluates the TALES expression and resolves it to
 a Template.  All existing slot definitions are saved on a stack (to allow
 nesting of macros) and the slots updated with any associated with this useMacro
 .  The macro is then rendered, the state of the slots restored and the rest
-of teh element content skipped.
+of the element content skipped.
 */
 func (u *useMacro) render(rc *renderContext) error {
 	contextValue := rc.talesContext.evaluate(u.expression, u.originalAttributes)
@@ -215,7 +215,7 @@ type defineVariable struct {
 	name string
 	// global is true if the definition should be set globally
 	global bool
-	// expression is the value to set the varaible to at runtime
+	// expression is the value to set the variable to at runtime
 	expression string
 	// originalAttributes contains the non-TAL attributes of the original template
 	originalAttributes attributesList
@@ -473,7 +473,7 @@ type renderStartTag struct {
 	// contentExpression holds the TALES expression to be evaluated if the
 	// content of the tag is to be changed
 	contentExpression string
-	// originalAttributes holds a copy of the original attributes assocaited
+	// originalAttributes holds a copy of the original attributes associated
 	// with the start tag
 	originalAttributes attributesList
 	// attributeExpression holds the list of TALES expressions to be evaluated
@@ -618,7 +618,7 @@ type renderContext struct {
 	talesContext *tales
 	// instructionPointer holds the index of the instruction in the template being executed.
 	instructionPointer int
-	// omitTagFlags is a stack of bools that is maintained by startTag and endTag to note whether the endTag should be ommitted.
+	// omitTagFlags is a stack of bools that is maintained by startTag and endTag to note whether the endTag should be omitted.
 	omitTagFlags []bool
 	// debug is the logger to use for debug messages
 	debug LogFunc
@@ -710,6 +710,27 @@ func (t *Template) addInstruction(instruction templateInstruction) {
 Render a template contents with the given context to the io.Writer.
 
 The Context object should be either a struct or a map with string keys.
+Resolution of TAL paths is done in the following order:
+
+	1 - nothing and default: built-in variables
+	2 - attrs: access to the original attributes on the element
+	3 - repeat: access to the repeat variables
+	4 - local variables
+	5 - global variables
+	6 - User provided context
+
+When looking for a property on local, global and user provided context the
+following lookup rules are followed:
+
+	1 - If a map, look for a value with the property name as the key.
+	2 - If a struct or pointer to a struct:
+		a) Look for an exported field with this name
+		b) Look for a Pointer Method with this name and call it
+		c) Look for a Value Method with this name and call it
+
+If a value found in either a map or struct field is a function, it will be
+called.  Functions and methods are called with no arguments and the first value
+returned is used as the resulting value.
 
 A RenderConfig option can be provided to set debug logging.
 */
@@ -747,7 +768,7 @@ func (t *Template) Macros() interface{} {
 	return t.macros
 }
 
-// renderAsSubtemplate is used to render a template into ane existing render.
+// renderAsSubtemplate is used to render a template into an existing render.
 func (t *Template) renderAsSubtemplate(context *tales, out io.Writer, slots *variableContainer, config ...RenderConfig) error {
 	rc := &renderContext{
 		template:     t,
