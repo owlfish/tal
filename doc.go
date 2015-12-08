@@ -65,9 +65,9 @@ Description:  Evaluates "expression", and if it is a sequence, repeats this tag 
     end 		- True if this is the last item in the sequence
     length 		- The length of the sequence
     letter 		- The lower case letter for this iteration, starting at "a"
-    letterUpper	- Upper case version of letter
+    Letter		- Upper case version of letter
     roman 		- Iteration number in Roman numerals, starting at i
-    romanUpper 	- Upper case version of roman
+    Roman	 	- Upper case version of roman
 
 Note that letterUpper and romanUpper are used instead of the standard TAL Letter and Roman.  The "first" and "last" properties are not supported.
 

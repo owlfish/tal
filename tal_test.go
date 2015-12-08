@@ -85,7 +85,7 @@ func TestTalReplaceTextKeywordNoExpression(t *testing.T) {
 			Text         interface{}
 		}{"<b>Some bold & text</b>",
 			"Test Text"},
-		`<body><p tal:replace="text">plan</p></body>`,
+		`<body><p tal:replace="Text">plan</p></body>`,
 		`<body>Test Text</body>`,
 	})
 }
@@ -107,7 +107,7 @@ func TestTalReplaceStructureKeywordNoExpression(t *testing.T) {
 			Structure    interface{}
 		}{"<b>Some bold & text</b>",
 			"Test Text"},
-		`<body><p tal:replace="structure">plan</p></body>`,
+		`<body><p tal:replace="Structure">plan</p></body>`,
 		`<body>Test Text</body>`,
 	})
 }
@@ -169,7 +169,7 @@ func TestTalContentTextKeywordNoExpression(t *testing.T) {
 			Text         interface{}
 		}{"<b>Some bold & text</b>",
 			"Test Text"},
-		`<body><p tal:content="text">plan</p></body>`,
+		`<body><p tal:content="Text">plan</p></body>`,
 		`<body><p>Test Text</p></body>`,
 	})
 }
@@ -191,7 +191,7 @@ func TestTalContentStructureKeywordNoExpression(t *testing.T) {
 			Structure    interface{}
 		}{"<b>Some bold & text</b>",
 			"Test Text"},
-		`<body><p tal:content="structure">plan</p></body>`,
+		`<body><p tal:content="Structure">plan</p></body>`,
 		`<body><p>Test Text</p></body>`,
 	})
 }
@@ -255,7 +255,7 @@ func TestTalRepeatDefault(t *testing.T) {
 			Default,
 			"Default vals",
 		},
-		`<body><h1>Test</h1> <ul> <li tal:repeat="vals ContextValue" class="line-item">Value <b tal:content="vals">Vals go here</b> done.</li></ul></body>`,
+		`<body><h1>Test</h1> <ul> <li tal:repeat="Vals ContextValue" class="line-item">Value <b tal:content="Vals">Vals go here</b> done.</li></ul></body>`,
 		`<body><h1>Test</h1> <ul> <li class="line-item">Value <b>Default vals</b> done.</li></ul></body>`,
 	})
 }
@@ -269,7 +269,7 @@ func TestTalRepeatOneEntry(t *testing.T) {
 			[]string{"One value"},
 			"Default vals",
 		},
-		`<body><h1>Test</h1> <ul> <li tal:repeat="vals ContextValue" class="line-item">Value <b tal:content="vals">Vals go here</b> done.</li></ul><p tal:content="vals"></p></body>`,
+		`<body><h1>Test</h1> <ul> <li tal:repeat="Vals ContextValue" class="line-item">Value <b tal:content="Vals">Vals go here</b> done.</li></ul><p tal:content="Vals"></p></body>`,
 		`<body><h1>Test</h1> <ul> <li class="line-item">Value <b>One value</b> done.</li></ul><p>Default vals</p></body>`,
 	})
 }
@@ -395,7 +395,7 @@ func TestTalAttributesMany(t *testing.T) {
 			V2    interface{}
 			V3    interface{}
 		}{"One", "Two", Default},
-		`<body><h1 class="class-one" id="#1" tal:attributes="class V3;id v2;href Value">Test</h1></body>`,
+		`<body><h1 class="class-one" id="#1" tal:attributes="class V3;id V2;href Value">Test</h1></body>`,
 		`<body><h1 class="class-one" id="Two" href="One">Test</h1></body>`,
 	})
 }
@@ -407,7 +407,7 @@ func TestTalAttributesWithContent(t *testing.T) {
 			V2    interface{}
 			V3    interface{}
 		}{"One", "Two", Default},
-		`<body><h1 class="class-one" id="#1" tal:attributes="class V3;id v2;href Value" tal:content="Value">Test</h1></body>`,
+		`<body><h1 class="class-one" id="#1" tal:attributes="class V3;id V2;href Value" tal:content="Value">Test</h1></body>`,
 		`<body><h1 class="class-one" id="Two" href="One">One</h1></body>`,
 	})
 }

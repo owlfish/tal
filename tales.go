@@ -27,39 +27,35 @@ type repeatVariable struct {
 	repeatId int
 }
 
-// Index returns the current position within the sequence, starting at 0.
-func (rv *repeatVariable) Index() int {
-	return rv.sequencePosition
-}
-
-// Number returns the current position within the sequence, starting at 1.
-func (rv *repeatVariable) Number() int {
-	return rv.sequencePosition + 1
-}
-
-// Even returns true if the current iteration is an even index
-func (rv *repeatVariable) Even() bool {
-	return rv.sequencePosition%2 == 0
-}
-
-// Even returns ture if the current iteration is an odd index
-func (rv *repeatVariable) Odd() bool {
-	return rv.sequencePosition%2 != 0
-}
-
-// Start returns true if this is the first iteration
-func (rv *repeatVariable) Start() bool {
-	return rv.sequencePosition == 0
-}
-
-// Start returns true if this is the last iteration
-func (rv *repeatVariable) End() bool {
-	return rv.sequencePosition == rv.sequenceLength-1
-}
-
-// Length returns the total number of iterations
-func (rv *repeatVariable) Length() int {
-	return rv.sequenceLength
+/*
+getProperty provides resolution of repeat variable properties
+*/
+func (rv *repeatVariable) getProperty(property string) interface{} {
+	switch property {
+	case "index":
+		return rv.sequencePosition
+	case "number":
+		return rv.sequencePosition + 1
+	case "even":
+		return rv.sequencePosition%2 == 0
+	case "odd":
+		return rv.sequencePosition%2 != 0
+	case "start":
+		return rv.sequencePosition == 0
+	case "end":
+		return rv.sequencePosition == rv.sequenceLength-1
+	case "length":
+		return rv.sequenceLength
+	case "letter":
+		return rv.Letter()
+	case "Letter":
+		return strings.ToUpper(rv.Letter())
+	case "roman":
+		return rv.Roman()
+	case "Roman":
+		return strings.ToUpper(rv.Roman())
+	}
+	return notFound
 }
 
 // Letter returns a letter (a, b, etc) for the iteration
@@ -74,11 +70,6 @@ func (rv *repeatVariable) Letter() string {
 		result = string('a'+thisColumn) + result
 	}
 	return result
-}
-
-// LetterUpper returns the upper case version of Letter
-func (rv *repeatVariable) LetterUpper() string {
-	return strings.ToUpper(rv.Letter())
 }
 
 // Roman returns the Number as roman numerals.
@@ -116,11 +107,6 @@ func (rv *repeatVariable) Roman() string {
 		}
 	}
 	return result
-}
-
-// RomanUpper returns the upper case version of Roman
-func (rv *repeatVariable) RomanUpper() string {
-	return strings.ToUpper(rv.Roman())
 }
 
 // indexedValue returns the current value
@@ -360,6 +346,17 @@ func (t *tales) expandPathSegment(segment string) (result string) {
 	case int:
 		// Cast to string
 		return strconv.Itoa(a)
+	case float32:
+		// Cast to string
+		return strconv.FormatFloat(float64(a), 'f', -1, 32)
+	case float64:
+		// Cast to string
+		return strconv.FormatFloat(a, 'f', -1, 64)
+	case bool:
+		if a {
+			return "true"
+		}
+		return "false"
 	}
 	return ""
 }
@@ -438,7 +435,15 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 			t.debug("Unable to find repeat variable %v - returning not found\n", pathElements[1])
 			return notFound
 		}
-		return t.resolvePathObject(value, pathElements[2:])
+		if len(pathElements) > 2 {
+			// Repeat variables have special property resolution rules - use these to get the value to progress further
+			expandedPathElement = t.expandPathSegment(pathElements[2])
+			if expandedPathElement == "" {
+				return notFound
+			}
+			return value.(*repeatVariable).getProperty(expandedPathElement)
+		}
+		return value
 	}
 
 	// Check local variables next
@@ -574,27 +579,27 @@ func (t *tales) resolveObjectProperty(value interface{}, property string) interf
 		// Lookup the value
 		// Go field names start with upper case to be exported
 		goFieldName := strings.ToUpper(property[:1]) + property[1:]
+		// We only support looking for exported fields and methods on structs.
+		if property != goFieldName {
+			return notFound
+		}
 		structField := data.FieldByName(goFieldName)
 		if structField.IsValid() {
-			// Make it concerete if it's an interface
+			// Make it concrete if it's an interface
 			// if structField.Kind() == reflect.Interface {
 			// 	structField = reflect.ValueOf(structField)
 			// }
 			t.debug("TALES: Found field in struct - kind of %v\n", structField.Kind())
-			// Check that this is an exported field
-			if structType, _ := data.Type().FieldByName(goFieldName); structType.PkgPath == "" {
-				//t.debug("TALES: Confirmed field in struct is exported - it's kind is %v\n", structField.Kind())
-				// Get field value wrapped in an interface{}
-				structFieldInterface := structField.Interface()
-				// Now get the reflected value of this interface
-				structField = reflect.ValueOf(structFieldInterface)
-				t.debug("New field kind: %v\n", structField.Kind())
-				if structField.Kind() == reflect.Func {
-					t.debug("Found function - calling it.\n")
-					return t.callFunc(structField)
-				}
-				return structFieldInterface
+			// Get field value wrapped in an interface{}
+			structFieldInterface := structField.Interface()
+			// Now get the reflected value of this interface
+			structField = reflect.ValueOf(structFieldInterface)
+			t.debug("New field kind: %v\n", structField.Kind())
+			if structField.Kind() == reflect.Func {
+				t.debug("Found function - calling it.\n")
+				return t.callFunc(structField)
 			}
+			return structFieldInterface
 		} else {
 			// Start by looking for pointer methods.
 			if rawData != data {
