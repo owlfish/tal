@@ -85,3 +85,31 @@ func TestMetalNestedMacros(t *testing.T) {
 		`<html><body><div>Hi there <div>Boo <b>NO! <i>Tester <b>was</b> here.</i></b></div></div></body></html>`,
 	})
 }
+
+func TestMetalDefineOnVoidElement(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["a"] = "Hello"
+	vals["b"] = "World"
+	macroTemplate, _ := CompileTemplate(strings.NewReader(`<html><body><img metal:define-macro="testMacro" href="test image">Hi <b>Default Person</b> there.</body></html>`))
+	vals["macros"] = macroTemplate.Macros()
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><div metal:use-macro="macros/testMacro">Macro</div>And <img metal:use-macro="macros/testMacro"> Another</body></html>`,
+		`<html><body><img href="test image">And <img href="test image"> Another</body></html>`,
+	})
+}
+
+func TestMetalSlotsOnVoidElement(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["a"] = "Hello"
+	vals["b"] = "World"
+	macroTemplate, _ := CompileTemplate(strings.NewReader(`<html><body><div metal:define-macro="testMacro">Hi <img src="test image" metal:define-slot="one"> There <b>Default Person</b> there.</div></body></html>`))
+	vals["macros"] = macroTemplate.Macros()
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><div metal:use-macro="macros/testMacro">Macro <i metal:fill-slot="one">I here</i></div> or <div metal:use-macro="macros/testMacro"> No more <img metal:fill-slot="one" src="alt image"> done. </div></body></html>`,
+		`<html><body><div>Hi <i>I here</i> There <b>Default Person</b> there.</div> or <div>Hi <img src="alt image"> There <b>Default Person</b> there.</div></body></html>`,
+	})
+}

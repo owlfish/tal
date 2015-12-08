@@ -609,13 +609,8 @@ func CompileTemplate(in io.Reader) (template *Template, err error) {
 			tagName := make([]byte, len(rawTagName))
 			copy(tagName, rawTagName)
 			// Note the tag
-			var voidElement bool
-			if !htmlVoidElements[string(tagName)] {
-				voidElement = false
-				state.addTag(tagName)
-			} else {
-				voidElement = true
-			}
+			var voidElement bool = htmlVoidElements[string(tagName)]
+			state.addTag(tagName)
 
 			var d buffer
 			var originalAtts []html.Attribute
@@ -651,9 +646,16 @@ func CompileTemplate(in io.Reader) (template *Template, err error) {
 				// Register an action to add the close tag in when we see it.
 				// This is done via an action so that we can use different logic for close tags that have tal commands
 				// tagName is captured by the closure
-				if !htmlVoidElements[string(tagName)] {
+				if !voidElement {
 					state.appendAction(getPlainEndTagAction(template, tagName))
+				} else {
+					// If we have a void element, pop it off the stack straight away
+					err = state.popTag(tagName)
+					if err != nil {
+						return nil, err
+					}
 				}
+
 				break
 			}
 
@@ -685,6 +687,16 @@ func CompileTemplate(in io.Reader) (template *Template, err error) {
 				currentStartTag, currentEndTag and tagName are defined inside the for loop and so are captured within the closure
 			*/
 			state.insertAction(getTalEndTagAction(currentStartTag, currentEndTag, template))
+
+			/*
+				If we have a void element, run through all end actions immediately.
+			*/
+			if currentStartTag.voidElement {
+				err = state.popTag(tagName)
+				if err != nil {
+					return nil, err
+				}
+			}
 
 		case html.EndTagToken:
 			tagName, _ := tokenizer.TagName()

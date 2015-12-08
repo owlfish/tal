@@ -595,7 +595,7 @@ func (d *renderStartTag) render(rc *renderContext) error {
 		}
 	}
 
-	if d.replaceCommand {
+	if d.replaceCommand && !d.voidElement {
 		rc.debug("Omit Tag is true, jumping to +%v\n", d.endTagOffset)
 		rc.instructionPointer += d.endTagOffset
 	} else {

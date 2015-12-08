@@ -437,6 +437,84 @@ func TestTalAttributesBoolean(t *testing.T) {
 	})
 }
 
+func TestTalVoidElementCondition(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["output"] = true
+	vals["nooutput"] = false
+
+	runTest(t, talTest{
+		vals,
+		`<body><img tal:condition="output" href="one"> Second part: <img tal:condition="nooutput" href="two">Hmm</body>`,
+		`<body><img href="one"> Second part: Hmm</body>`,
+	})
+}
+
+func TestTalVoidElementDefineLocal(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["output"] = "Test Out"
+
+	runTest(t, talTest{
+		vals,
+		`<body><img tal:define="title output" tal:attributes="title title"> Second part: <p tal:replace="title"></p></body>`,
+		`<body><img title="Test Out"> Second part: </body>`,
+	})
+}
+
+func TestTalVoidElementDefineGlobal(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["output"] = "Test Out"
+
+	runTest(t, talTest{
+		vals,
+		`<body><img tal:define="global title output" tal:attributes="title title"> Second part: <p tal:replace="title"></p></body>`,
+		`<body><img title="Test Out"> Second part: Test Out</body>`,
+	})
+}
+
+func TestTalVoidElementRepeat(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["output"] = []string{"One", "Two"}
+
+	runTest(t, talTest{
+		vals,
+		`<body><img tal:repeat="count output" tal:attributes="title count"> Filler</body>`,
+		`<body><img title="One"><img title="Two"> Filler</body>`,
+	})
+}
+
+func TestTalVoidElementContent(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["output"] = "Test Out"
+
+	runTest(t, talTest{
+		vals,
+		`<body><img tal:content="output"> Second part: <p tal:replace="output"></p></body>`,
+		`<body><img>Test Out Second part: Test Out</body>`,
+	})
+}
+
+func TestTalVoidElementReplace(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["output"] = "Test Out"
+
+	runTest(t, talTest{
+		vals,
+		`<body><img tal:replace="output"> Second part: <p tal:replace="output"></p></body>`,
+		`<body>Test Out Second part: Test Out</body>`,
+	})
+}
+
+func TestTalVoidElementOmitTag(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["output"] = true
+
+	runTest(t, talTest{
+		vals,
+		`<body><img tal:omit-tag="output" href="one"> Filler.</body>`,
+		`<body> Filler.</body>`,
+	})
+}
+
 type talTest struct {
 	Context  interface{}
 	Template string
