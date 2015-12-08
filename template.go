@@ -289,25 +289,12 @@ type renderRepeat struct {
 /*
 render for starting a tal:repeat command.
 
-A check is made to see if we are already in a loop by looking for a repeat
-variable with this name and then verifying the repeatId's match.
-
-If not in a loop already, the TALES expression is evaluated and checked to
-make sure it is a sequence.  Then a local and repeat variable are established.
+The TALES expression is evaluated and checked to make sure it is a sequence.
+Then a local and repeat variable are established.
 
 If the value is not a sequence type then the instruction jumps to the end tag.
 */
 func (d *renderRepeat) render(rc *renderContext) error {
-	// Check to see whether we are already doing a repeat sequence for this tag.
-	repeatVar, ok := rc.talesContext.repeatVariables.GetValue(d.repeatName)
-	if ok {
-		repeatVar := repeatVar.(*repeatVariable)
-		if repeatVar.repeatId == d.repeatId {
-			// We have a match - we are already repeating and so nothing to do but continue
-			return nil
-		}
-	}
-
 	var contentValue interface{} = nil
 	if d.condition != "" {
 		contentValue = rc.talesContext.evaluate(d.condition, d.originalAttributes)
@@ -358,7 +345,8 @@ variable with this name and then verifying the repeatId's match.
 
 The sequence position is advanced.  If this takes it beyond the length of the
 sequence, the repeat and local variables are removed.  Otherwise the
-instruction pointer is set to the start of the repeat loop.
+instruction pointer is set to the first instruction after the start of the
+repeat loop.
 */
 func (d *renderEndRepeat) render(rc *renderContext) error {
 	// Check to see whether we are doing a repeat sequence.

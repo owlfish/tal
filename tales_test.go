@@ -33,6 +33,50 @@ func TestTalesDeepPaths(t *testing.T) {
 	})
 }
 
+func TestTalesExplicitPath(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["b"] = "Hello"
+	vals["c"] = "World"
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><h1 tal:content="path:a|path:b"></h1><h2 tal:content="path:b|path:c"></h2><h3 tal:content="path:a|b|path:c"></h3></body></html>`,
+		`<html><body><h1>Hello</h1><h2>Hello</h2><h3>Hello</h3></body></html>`,
+	})
+}
+
+func TestTalesVariablePathNotFound(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["b"] = "Hello"
+	vals["c"] = "World"
+	vals["Hello"] = "World"
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><h1 tal:content="?b"></h1><h2 tal:content="?d"></h2><h3 tal:content="?c"></h3></body></html>`,
+		`<html><body><h1>World</h1><h2></h2><h3></h3></body></html>`,
+	})
+}
+
+func TestTalesVariablePathNoneStrings(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["a"] = 1
+	vals["b"] = float32(1.1)
+	vals["c"] = float64(1.1)
+	vals["d"] = true
+	vals["e"] = false
+	vals["1"] = "Dog"
+	vals["1.1"] = "Cat"
+	vals["true"] = "Mouse"
+	vals["false"] = "Ham"
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><h1 tal:content="?a"></h1><h2 tal:content="?b"></h2><h3 tal:content="?c"></h3><h3 tal:content="?d"></h3><h3 tal:content="?e"></h3></body></html>`,
+		`<html><body><h1>Dog</h1><h2>Cat</h2><h3>Cat</h3><h3>Mouse</h3><h3>Ham</h3></body></html>`,
+	})
+}
+
 func TestTalesOrPaths(t *testing.T) {
 	vals := make(map[string]interface{})
 	vals["b"] = "Hello"
@@ -42,6 +86,18 @@ func TestTalesOrPaths(t *testing.T) {
 		vals,
 		`<html><body><h1 tal:content="a|b"></h1><h2 tal:content="b|c"></h2><h3 tal:content="a|b|c"></h3></body></html>`,
 		`<html><body><h1>Hello</h1><h2>Hello</h2><h3>Hello</h3></body></html>`,
+	})
+}
+
+func TestTalesBrokenOrPaths(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["b"] = "Hello"
+	vals["c"] = "World"
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><h1 tal:content="attrs|b"></h1><h2 tal:content="repeat|c"></h2></body></html>`,
+		`<html><body><h1>Hello</h1><h2>World</h2></body></html>`,
 	})
 }
 
@@ -572,11 +628,24 @@ func TestTalesStuctPointer(t *testing.T) {
 	vals["Bob"] = &person{"Bobby", 12}
 	vals["Mary"] = person{"Mary", 13}
 
-	// Test whether calling the function from a tales path works
 	runTalesTest(t, talesTest{
 		vals,
 		`<html><body><p tal:content="Bob/Name"></p><p tal:content="Mary/Age"></p></body></html>`,
 		`<html><body><p>Bobby</p><p>13</p></body></html>`,
+	})
+}
+
+func TestTalesFloatsTruth(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["One"] = float32(0.0)
+	vals["Two"] = float32(1.1)
+	vals["Three"] = float64(0)
+	vals["Four"] = float64(1.1)
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><p tal:condition="One">One</p><p tal:condition="Two">Two</p><p tal:condition="Three">Three</p><p tal:condition="Four">Four</p></body></html>`,
+		`<html><body><p>Two</p><p>Four</p></body></html>`,
 	})
 }
 
