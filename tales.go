@@ -8,6 +8,24 @@ import (
 )
 
 /*
+TalesVariables provide a method allowing properties to be resolved to a value.
+
+TalesVariables can be used to provide custom lookups for resolving the last
+entry in a path.
+*/
+type TalesVariable interface {
+	/*
+		TalesValue handles all property lookups on the object.
+
+		All fields & methods that would normally be automatically found by tal will
+		instead be passed to TalesValue for handling.
+
+		If the property is not supported by this object, nil should be returned.
+	*/
+	TalesValue(property string) (result interface{})
+}
+
+/*
 repeatVariable implements the tal repeat variable.
 
 There are some differences from the spec:
@@ -28,9 +46,9 @@ type repeatVariable struct {
 }
 
 /*
-getProperty provides resolution of repeat variable properties
+TalesValue provides resolution of repeat variable properties
 */
-func (rv *repeatVariable) getProperty(property string) interface{} {
+func (rv *repeatVariable) TalesValue(property string) interface{} {
 	switch property {
 	case "index":
 		return rv.sequencePosition
@@ -435,15 +453,11 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 			t.debug("Unable to find repeat variable %v - returning not found\n", pathElements[1])
 			return notFound
 		}
-		if len(pathElements) > 2 {
-			// Repeat variables have special property resolution rules - use these to get the value to progress further
-			expandedPathElement = t.expandPathSegment(pathElements[2])
-			if expandedPathElement == "" {
-				return notFound
-			}
-			return value.(*repeatVariable).getProperty(expandedPathElement)
+		pathValue := t.resolvePathObject(value, pathElements[2:])
+		if pathValue == notFound && endOfExpression > -1 {
+			return t.evaluateExpression(talesExpression[endOfExpression+1:])
 		}
-		return value
+		return pathValue
 	}
 
 	// Check local variables next
@@ -553,6 +567,13 @@ fields and methods.
 Any func or method found will be called and it's value will be returned.
 */
 func (t *tales) resolveObjectProperty(value interface{}, property string) interface{} {
+	// See if this is a TalesVariable
+	talesVar, ok := value.(TalesVariable)
+	if ok {
+		// We have a tales variable - just return it's result
+		t.debug("TalesVariable found - looking for property %v\n", property)
+		return talesVar.TalesValue(property)
+	}
 	rawData := reflect.ValueOf(value)
 	data := reflect.Indirect(rawData)
 	kind := data.Kind()
