@@ -69,7 +69,7 @@ Description:  Evaluates "expression", and if it is a sequence, repeats this tag 
     roman 		- Iteration number in Roman numerals, starting at i
     Roman	 	- Upper case version of roman
 
-Note that letterUpper and romanUpper are used instead of the standard TAL Letter and Roman.  The "first" and "last" properties are not supported.
+The "first" and "last" properties are not supported.
 
 Example:
 
