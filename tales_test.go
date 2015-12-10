@@ -81,11 +81,12 @@ func TestTalesOrPaths(t *testing.T) {
 	vals := make(map[string]interface{})
 	vals["b"] = "Hello"
 	vals["c"] = "World"
+	vals["d"] = nil
 
 	runTalesTest(t, talesTest{
 		vals,
-		`<html><body><h1 tal:content="a|b"></h1><h2 tal:content="b|c"></h2><h3 tal:content="a|b|c"></h3></body></html>`,
-		`<html><body><h1>Hello</h1><h2>Hello</h2><h3>Hello</h3></body></html>`,
+		`<html><body><h1 tal:content="a|b"></h1><h2 tal:content="b|c"></h2><h3 tal:content="a|b|c"></h3><h3 tal:content="d|b"></h3></body></html>`,
+		`<html><body><h1>Hello</h1><h2>Hello</h2><h3>Hello</h3><h3>Hello</h3></body></html>`,
 	})
 }
 

@@ -379,11 +379,6 @@ func (t *tales) expandPathSegment(segment string) (result string) {
 	return ""
 }
 
-/*
-evaluatePath evaluates a path: or implied TALES path expression.
-
-The | operator is supported, triggering recursive calls to evaluateExpression.
-*/
 func (t *tales) evaluatePath(talesExpression string) interface{} {
 	// Do we have alternative expressions to evaluate?
 	talesExpression = strings.TrimSpace(talesExpression)
@@ -396,6 +391,25 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 		// Only evaluate the first path we have
 		pathExpression = talesExpression[:endOfExpression]
 	}
+
+	pathResult := t.evaluateSinglePath(pathExpression)
+
+	if endOfExpression > -1 {
+		if pathResult == notFound || pathResult == nil {
+			// We have an alternative - evaluate it recursively.
+			return t.evaluateExpression(talesExpression[endOfExpression+1:])
+		}
+	}
+	return pathResult
+}
+
+/*
+evaluatePath evaluates a path: or implied TALES path expression.
+
+The | operator is supported, triggering recursive calls to evaluateExpression.
+*/
+func (t *tales) evaluateSinglePath(pathExpression string) interface{} {
+	pathExpression = strings.TrimSpace(pathExpression)
 
 	// We need to figure out the root object (local, global, user, repeat) before we can evaluate further
 	// Breakup the path
@@ -418,12 +432,7 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 	if objectName == "attrs" {
 		// Looking for an original attribute value
 		if len(pathElements) < 2 {
-			// In case the template does something silly like: attrs |  string: No repeat, we should check and act on any remaining expressions
-			if endOfExpression > -1 {
-				return t.evaluateExpression(talesExpression[endOfExpression+1:])
-			}
-			// If this is the last expression being evaluated - return None
-			return nil
+			return notFound
 		}
 		expandedPathElement := t.expandPathSegment(pathElements[1])
 		if expandedPathElement == "" {
@@ -436,11 +445,7 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 		// Looking for a repeat variable
 		if len(pathElements) < 2 {
 			// In case the template does something silly like: repeat |  string: No repeat, we should check and act on any remaining expressions
-			if endOfExpression > -1 {
-				return t.evaluateExpression(talesExpression[endOfExpression+1:])
-			}
-			// If this is the last expression being evaluated - return None
-			return nil
+			return notFound
 		}
 		expandedPathElement := t.expandPathSegment(pathElements[1])
 		if expandedPathElement == "" {
@@ -454,9 +459,6 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 			return notFound
 		}
 		pathValue := t.resolvePathObject(value, pathElements[2:])
-		if pathValue == notFound && endOfExpression > -1 {
-			return t.evaluateExpression(talesExpression[endOfExpression+1:])
-		}
 		return pathValue
 	}
 
@@ -464,9 +466,6 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 	value, ok := t.localVariables.GetValue(objectName)
 	if ok {
 		pathValue := t.resolvePathObject(value, pathElements[1:])
-		if pathValue == notFound && endOfExpression > -1 {
-			return t.evaluateExpression(talesExpression[endOfExpression+1:])
-		}
 		return pathValue
 	}
 
@@ -474,17 +473,11 @@ func (t *tales) evaluatePath(talesExpression string) interface{} {
 	value, ok = t.globalVariables.GetValue(objectName)
 	if ok {
 		pathValue := t.resolvePathObject(value, pathElements[1:])
-		if pathValue == notFound && endOfExpression > -1 {
-			return t.evaluateExpression(talesExpression[endOfExpression+1:])
-		}
 		return pathValue
 	}
 
 	// Try the user provided data
 	pathValue := t.resolvePathObject(t.data, pathElements)
-	if pathValue == notFound && endOfExpression > -1 {
-		return t.evaluateExpression(talesExpression[endOfExpression+1:])
-	}
 	return pathValue
 }
 
