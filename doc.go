@@ -140,7 +140,7 @@ path: provides access to properties on objects.
 
 	Syntax: [path:]string[|TALES Expression]
 
-Description: A path, optionally starting with the modifier 'path:', references a property of an object.  The '/' delimiter is used to end the name of an object and start of the property name.  Properties themselves may be objects that in turn have properties.  The '|' ("or") character is used to find an alternative value to a path if the first path evaluates does not exist.
+Description: A path, optionally starting with the modifier 'path:', references a property of an object.  The '/' delimiter is used to end the name of an object and start of the property name.  Properties themselves may be objects that in turn have properties.  The '|' ("or") character is used to find an alternative value to a path if the first path evaluates to nil or does not exist.
 
 Example:
 
