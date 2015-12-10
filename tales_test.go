@@ -145,6 +145,17 @@ func TestTalesRepeatIndex(t *testing.T) {
 	})
 }
 
+func TestTalesRepeatIndexGlobal(t *testing.T) {
+	vals := make(map[string]interface{})
+	vals["a"] = []string{"One", "Two", "Three"}
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><p tal:repeat="num a"><b tal:define="global lastIndex repeat/num/index" tal:content="repeat/num/index"></b> - <b tal:content="num"></b></p><i tal:content="lastIndex"></i></body></html>`,
+		`<html><body><p><b>0</b> - <b>One</b></p><p><b>1</b> - <b>Two</b></p><p><b>2</b> - <b>Three</b></p><i>2</i></body></html>`,
+	})
+}
+
 func TestTalesRepeatNumber(t *testing.T) {
 	vals := make(map[string]interface{})
 	var value []int
