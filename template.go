@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"golang.org/x/net/html"
 	"io"
+	"strings"
 )
 
 /*
@@ -111,7 +112,7 @@ func (d *defineSlot) render(rc *renderContext) error {
 
 // String returns a text description fo the instruction
 func (d *defineSlot) String() string {
-	return fmt.Sprintf("Define slot %v - end offset %v", d.name, d.endTagOffset)
+	return fmt.Sprintf("[Define Slot] %v (end offset %v)", d.name, d.endTagOffset)
 }
 
 /*
@@ -162,7 +163,7 @@ func (u *useMacro) render(rc *renderContext) error {
 
 // String returns a text description fo the instruction
 func (u *useMacro) String() string {
-	return fmt.Sprintf("Use Macro %v", u.expression)
+	return fmt.Sprintf("[Use Macro] %v", u.expression)
 }
 
 /*
@@ -204,7 +205,7 @@ func (d *renderEndTag) render(rc *renderContext) error {
 
 // String returns a text description fo the instruction
 func (d *renderEndTag) String() string {
-	return fmt.Sprintf("</%v> omit flag test: %v", string(d.tagName), d.checkOmitTagFlag)
+	return fmt.Sprintf("[End Tag] %v (check omit flag: %v)", string(d.tagName), d.checkOmitTagFlag)
 }
 
 /*
@@ -245,7 +246,7 @@ func (d *defineVariable) String() string {
 		typeOfVar = "global"
 	}
 
-	return fmt.Sprintf("Set variable %v %v to %v", typeOfVar, d.name, d.expression)
+	return fmt.Sprintf("[Define Variable] %v %v to '%v'", typeOfVar, d.name, d.expression)
 }
 
 /*
@@ -267,7 +268,7 @@ func (d *removeLocalVariable) render(rc *renderContext) error {
 
 // String returns a text description fo the instruction
 func (d *removeLocalVariable) String() string {
-	return "Remove Local Variable"
+	return "[Remove Local Variable]"
 }
 
 /*
@@ -322,7 +323,7 @@ func (d *renderRepeat) render(rc *renderContext) error {
 
 // String returns a text description fo the instruction
 func (d *renderRepeat) String() string {
-	return fmt.Sprintf("Repeat %v (condition %v) to index +%v", d.repeatName, d.condition, d.endTagOffset)
+	return fmt.Sprintf("[Repeat] %v condition '%v' (End Offset %v)", d.repeatName, d.condition, d.endTagOffset)
 }
 
 /*
@@ -380,7 +381,7 @@ func (d *renderEndRepeat) render(rc *renderContext) error {
 
 // String returns a text description fo the instruction
 func (d *renderEndRepeat) String() string {
-	return fmt.Sprintf("END Repeat %v (id %v) start index %v", d.repeatName, d.repeatId, d.repeatStartOffset)
+	return fmt.Sprintf("[End Repeat] %v (id %v - loop start offset %v)", d.repeatName, d.repeatId, d.repeatStartOffset)
 }
 
 // renderData is a template instruction that outputs a slice of bytes
@@ -405,9 +406,9 @@ func (d *renderData) render(rc *renderContext) error {
 func (d *renderData) String() string {
 	dataStr := string(d.data)
 	if len(dataStr) > 60 {
-		dataStr = dataStr[:60]
+		dataStr = dataStr[:60] + "..."
 	}
-	return dataStr
+	return fmt.Sprintf("[Output] %v", strings.Replace(dataStr, string('\n'), `\n`, -1))
 }
 
 /*
@@ -446,7 +447,7 @@ func (d *renderCondition) render(rc *renderContext) error {
 
 // String returns a text description fo the instruction
 func (d *renderCondition) String() string {
-	return fmt.Sprintf("Condition %v to offset %v", d.condition, d.endTagOffset)
+	return fmt.Sprintf("[Condition] '%v' (to offset %v)", d.condition, d.endTagOffset)
 }
 
 /*
@@ -482,7 +483,39 @@ type renderStartTag struct {
 
 // String returns a text description fo the instruction
 func (d *renderStartTag) String() string {
-	return fmt.Sprintf("<%v> start tag - contentStructure %v - contentExpression %v - omitTagExpression %v - endTagOffset %v", string(d.tagName), d.contentStructure, d.contentExpression, d.omitTagExpression, d.endTagOffset)
+	desc := make(buffer, 0, 240)
+	var params []interface{}
+
+	desc.appendString("[Start Tag] %v")
+	params = append(params, string(d.tagName))
+
+	if d.contentExpression != "" {
+		if d.contentStructure {
+			desc.appendString(" structure")
+		}
+		if d.replaceCommand {
+			desc.appendString(" replace with '%v'")
+		} else {
+			desc.appendString(" content of '%v'")
+		}
+		params = append(params, d.contentExpression)
+	}
+
+	if len(d.attributeExpression) > 0 {
+		desc.appendString(" attributes set to %v")
+		params = append(params, d.attributeExpression)
+	}
+
+	if d.omitTagExpression != "" {
+		desc.appendString(" omit tag if '%v'")
+		params = append(params, d.omitTagExpression)
+	}
+
+	desc.appendString(" (end tag offset %v void element %v)")
+	params = append(params, d.endTagOffset)
+	params = append(params, d.voidElement)
+
+	return fmt.Sprintf(string(desc), params...)
 }
 
 /*

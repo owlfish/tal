@@ -99,6 +99,7 @@ func BenchmarkDeeplyNestedRepeat(b *testing.B) {
 	resultBuffer := &bytes.Buffer{}
 	err = temp.Render(context, resultBuffer)
 
+	//fmt.Printf("%v\n", temp)
 	//fmt.Printf(resultBuffer.String())
 
 	for i := 0; i < b.N; i++ {

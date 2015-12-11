@@ -437,6 +437,17 @@ func TestTalAttributesBoolean(t *testing.T) {
 	})
 }
 
+func TestTalNamespaceAtts(t *testing.T) {
+	runTest(t, talTest{
+		struct {
+			Value interface{}
+			V2    interface{}
+		}{"One", "Two"},
+		`<body><owlfish:h1 tal:attributes="owlfish:href V2;owlfish:class Value;owlfish:id nothing" owlfish:href="DefaultValue" owlfish:id="DefaultValue">Test</owlfish:h1><owlfish:h2>Passthrough</owlfish:h2></body>`,
+		`<body><owlfish:h1 owlfish:href="Two" owlfish:class="One">Test</owlfish:h1><owlfish:h2>Passthrough</owlfish:h2></body>`,
+	})
+}
+
 func TestTalVoidElementCondition(t *testing.T) {
 	vals := make(map[string]interface{})
 	vals["output"] = true
