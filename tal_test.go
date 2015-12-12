@@ -526,6 +526,74 @@ func TestTalVoidElementOmitTag(t *testing.T) {
 	})
 }
 
+func TestTalErrUnexpectedCloseTag(t *testing.T) {
+	runCompileErrorTest(t, errTest{`<html><body>Hi</html>`, ErrUnexpectedCloseTag})
+}
+
+func TestTalErrUnknownTalCommand(t *testing.T) {
+	runCompileErrorTest(t, errTest{`<html><body tal:nosuchcommand="boo">Hi</body></html>`, ErrUnknownTalCommand})
+}
+
+func TestTalErrExpressionMalformed(t *testing.T) {
+	runCompileErrorTest(t, errTest{`<html><body tal:repeat="one two three">Hi</body></html>`, ErrExpressionMalformed})
+}
+
+func TestErrExpressionMissingDefine(t *testing.T) {
+	runCompileErrorTest(t, errTest{`<html><body tal:define="one">Hi</body></html>`, ErrExpressionMissing})
+}
+
+func TestErrExpressionMissingDefineLocal(t *testing.T) {
+	runCompileErrorTest(t, errTest{`<html><body tal:define="local one">Hi</body></html>`, ErrExpressionMissing})
+}
+
+func TestErrExpressionMissingDefineGlobal(t *testing.T) {
+	runCompileErrorTest(t, errTest{`<html><body tal:define="global one">Hi</body></html>`, ErrExpressionMissing})
+}
+
+func TestErrExpressionMissingAttribute(t *testing.T) {
+	runCompileErrorTest(t, errTest{`<html><body tal:attributes="one">Hi</body></html>`, ErrExpressionMissing})
+}
+
+func TestErrExpressionMissingReplace(t *testing.T) {
+	runCompileErrorTest(t, errTest{`<html><body tal:replace="">Hi</body></html>`, ErrExpressionMissing})
+}
+
+func TestErrExpressionMissingContent(t *testing.T) {
+	runCompileErrorTest(t, errTest{`<html><body tal:content="">Hi</body></html>`, ErrExpressionMissing})
+}
+
+func TestErrExpressionMissingCondition(t *testing.T) {
+	runCompileErrorTest(t, errTest{`<html><body tal:condition="">Hi</body></html>`, ErrExpressionMissing})
+}
+
+func TestErrExpressionMissingOmitTag(t *testing.T) {
+	runCompileErrorTest(t, errTest{`<html><body tal:omit-tag="">Hi</body></html>`, ErrExpressionMissing})
+}
+
+func TestErrSlotOutsideMacro(t *testing.T) {
+	runCompileErrorTest(t, errTest{`<html><body metal:fill-slot="one">Hi</body></html>`, ErrSlotOutsideMacro})
+}
+
+type errTest struct {
+	Template                 string
+	ExpectedCompileErrorCode int
+}
+
+func runCompileErrorTest(t *testing.T, test errTest) {
+	_, err := CompileTemplate(strings.NewReader(test.Template))
+	compileErr, ok := err.(*CompileError)
+	if !ok {
+		t.Errorf("CompileError not returned: %v.", err)
+		return
+	}
+	if err.Error() == "" {
+		t.Errorf("No error string returned.")
+	}
+	if compileErr.ErrorType != test.ExpectedCompileErrorCode {
+		t.Errorf("CompileError returned %v not %v", compileErr, test.ExpectedCompileErrorCode)
+	}
+}
+
 type talTest struct {
 	Context  interface{}
 	Template string

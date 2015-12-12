@@ -135,6 +135,24 @@ func TestTalesRepeatArray(t *testing.T) {
 	})
 }
 
+func TestTalesRepeatNoSuchProperty(t *testing.T) {
+	vals := make(map[string]interface{})
+	var value []int
+
+	for i := 0; i < 100; i++ {
+		value = append(value, i)
+	}
+
+	vals["a"] = value
+	vals["true"] = true
+
+	runTalesTest(t, talesTest{
+		vals,
+		`<html><body><p tal:repeat="num a" tal:omit-tag="true"><b tal:replace="repeat/num/nosuchproperty"></b></p></body></html>`,
+		`<html><body></body></html>`,
+	})
+}
+
 func TestTalesRepeatIndex(t *testing.T) {
 	vals := make(map[string]interface{})
 	vals["a"] = []string{"One", "Two", "Three"}

@@ -673,7 +673,10 @@ func CompileTemplate(in io.Reader) (template *Template, err error) {
 					// As we are returning here we know that tokenizer will not get a chance to change the results of Raw() or Buffered()
 					return nil, newCompileError(ErrUnknownTalCommand, state.tokenizer.Raw(), state.tokenizer.Buffered())
 				}
-				properties.StartAction(originalAtts, talCommand.Val, state)
+				err := properties.StartAction(originalAtts, talCommand.Val, state)
+				if err != nil {
+					return nil, err
+				}
 			}
 			// Output the start tag
 			currentStartTag := state.talStartTag

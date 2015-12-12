@@ -795,7 +795,7 @@ func (t *Template) Render(context interface{}, out io.Writer, config ...RenderCo
 }
 
 /*
-Templates are TalesValue that provide their macros as properties.
+Templates are a TalesValue that provide it's macros as properties.
 
 A Template's own macros are made available to it under the "macros" object.
 */

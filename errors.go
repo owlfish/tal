@@ -24,6 +24,12 @@ func (err *CompileError) Error() string {
 		msg = "Unexpected Close Tag"
 	case ErrSlotOutsideMacro:
 		msg = "metal:fill-slot used outside of macro definition"
+	case ErrUnknownTalCommand:
+		msg = "Unknown / unsupported command"
+	case ErrExpressionMalformed:
+		msg = "Parameters to tal command did not match specification."
+	case ErrExpressionMissing:
+		msg = "Expression missing from command"
 	default:
 		msg = "Unexpected error"
 	}

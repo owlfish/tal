@@ -260,5 +260,9 @@ Example:
 		<i metal:fill-slot="Contact">Contact someone else</i>
 	</div>
 
+Notes On HTML
+
+The tal package supports html5 output.  Void elements (such as <img>) are supported and will correctly suppress end tags.  Templates must have balanced start and end tags for non-void elements.  Even though HTML5 elements defines several elements as supporting optional end tags, for tal templates end tags must be provided.
+
 */
 package tal
