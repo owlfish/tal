@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"golang.org/x/net/html"
 	"io"
-	"log"
 	"sort"
 	"strings"
 )
@@ -116,7 +115,7 @@ func (state *compileState) popTag(tag []byte) error {
 		if bytes.Equal(candidate.tag, tag) {
 			return nil
 		}
-		log.Printf("Mis-Matched tags %s and %s\n", candidate.tag, tag)
+		//state.Printf("Mis-Matched tags %s and %s\n", candidate.tag, tag)
 	}
 	return newCompileError(ErrUnexpectedCloseTag, state.tokenizer.Raw(), state.tokenizer.Buffered())
 }
@@ -268,6 +267,7 @@ func metalFillSlotEnd(name string, state *compileState) endActionFunc {
 	return func() {
 		slotTemplate := newTemplate()
 		slotTemplate.instructions = state.template.instructions[startPoint:]
+		slotTemplate.macros = state.template.macros
 		state.currentMacro.filledSlots[name] = slotTemplate
 	}
 }
@@ -333,6 +333,7 @@ func metalDefineMacroEndAction(t *Template, name string, startInstructionIndex i
 		// Contains all instructions from the start to the end last instruction created.
 		macroTemplate := newTemplate()
 		macroTemplate.instructions = t.instructions[startInstructionIndex:]
+		macroTemplate.macros = t.macros
 		t.macros[name] = macroTemplate
 	}
 }

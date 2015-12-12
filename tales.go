@@ -8,12 +8,12 @@ import (
 )
 
 /*
-TalesVariables provide a method allowing properties to be resolved to a value.
+TalesValue provide a method allowing properties to be resolved to a value.
 
-TalesVariables can be used to provide custom lookups for resolving the last
+TalesValue can be used to provide custom lookups for resolving the last
 entry in a path.
 */
-type TalesVariable interface {
+type TalesValue interface {
 	/*
 		TalesValue handles all property lookups on the object.
 
@@ -560,11 +560,11 @@ fields and methods.
 Any func or method found will be called and it's value will be returned.
 */
 func (t *tales) resolveObjectProperty(value interface{}, property string) interface{} {
-	// See if this is a TalesVariable
-	talesVar, ok := value.(TalesVariable)
+	// See if this is a TalesValue
+	talesVar, ok := value.(TalesValue)
 	if ok {
 		// We have a tales variable - just return it's result
-		t.debug("TalesVariable found - looking for property %v\n", property)
+		t.debug("TalesValue found - looking for property %v\n", property)
 		return talesVar.TalesValue(property)
 	}
 	rawData := reflect.ValueOf(value)

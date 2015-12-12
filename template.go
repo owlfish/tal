@@ -139,6 +139,16 @@ of the element content skipped.
 */
 func (u *useMacro) render(rc *renderContext) error {
 	contextValue := rc.talesContext.evaluate(u.expression, u.originalAttributes)
+	if contextValue == Default {
+		// Continue - use the content of the macro.
+		return nil
+	}
+
+	if contextValue == nil {
+		// No macro - remove the use-macro element
+		rc.instructionPointer += u.endTagOffset
+		return nil
+	}
 
 	mv, ok := contextValue.(*Template)
 	if ok {
@@ -768,6 +778,10 @@ func (t *Template) Render(context interface{}, out io.Writer, config ...RenderCo
 	for _, c := range config {
 		c(t, rc)
 	}
+
+	// Put our macros under /macros
+	rc.talesContext.globalVariables.SetValue("macros", t)
+
 	for rc.instructionPointer < len(t.instructions) {
 		instruction := t.instructions[rc.instructionPointer]
 		rc.debug("Executing instruction %v\n", instruction)
@@ -781,12 +795,16 @@ func (t *Template) Render(context interface{}, out io.Writer, config ...RenderCo
 }
 
 /*
-Macros returns an object that contains the macros defined in this template.
+Templates are TalesValue that provide their macros as properties.
 
-This is used to expose these macros into the context for execution.
+A Template's own macros are made available to it under the "macros" object.
 */
-func (t *Template) Macros() interface{} {
-	return t.macros
+func (t *Template) TalesValue(name string) interface{} {
+	result, ok := t.macros[name]
+	if ok {
+		return result
+	}
+	return nil
 }
 
 // renderAsSubtemplate is used to render a template into an existing render.
@@ -806,6 +824,10 @@ func (t *Template) renderAsSubtemplate(context *tales, out io.Writer, slots *var
 	// Save global state
 	rc.talesContext.globalVariables.SaveAll()
 	defer rc.talesContext.globalVariables.RestoreAll()
+
+	// Put our macros under /macros
+	// These will be removed by the RestoreAll call
+	rc.talesContext.globalVariables.SetValue("macros", t)
 
 	for rc.instructionPointer < len(t.instructions) {
 		instruction := t.instructions[rc.instructionPointer]
