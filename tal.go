@@ -584,6 +584,10 @@ CompileTemplate reads the template in and compiles it ready for execution.
 
 If a compilation error (rather than IO error) occurs, the returned error
 will be a CompileError object.
+
+The io.Reader must provide a stream of UTF-8 encoded text.  Templates
+render into UTF-8, so any conversion to or from other character sets must be
+carried out in the io.Reader and io.Writer used.
 */
 func CompileTemplate(in io.Reader) (template *Template, err error) {
 	tokenizer := html.NewTokenizer(in)

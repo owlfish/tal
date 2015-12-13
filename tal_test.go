@@ -574,6 +574,33 @@ func TestErrSlotOutsideMacro(t *testing.T) {
 	runCompileErrorTest(t, errTest{`<html><body metal:fill-slot="one">Hi</body></html>`, ErrSlotOutsideMacro})
 }
 
+func TestTemplateStringOutput(t *testing.T) {
+	// A template that triggers every command possible
+	templateData := `<html>
+	<h1 tal:content="title" tal:omit-tag="maybe">Hmm</h1>
+	<h2 tal:attributes="one two">Atts here</h2>
+	<ul>
+	<li tal:repeat="thing things">
+		<b tal:replace="thing/name" tal:define="lastEvent repeat/things/even">Hmm</b>
+	</li>
+	</ul>
+	<p tal:condition="lastEven">The last one was even</p>
+	<div metal:define-macro="one">
+		<p metal:define-slot="s1">Slot One here</p>
+	</div>
+	<div metal:use-macro="macros/one">
+		<b metal:fill-slot="s1">S1 filled</b>
+	</div>
+	</html>
+	`
+	templ, err := CompileTemplate(strings.NewReader(templateData))
+	if err != nil {
+		t.Errorf("Error compiling template: %v", err)
+		return
+	}
+	templ.String()
+}
+
 type errTest struct {
 	Template                 string
 	ExpectedCompileErrorCode int
