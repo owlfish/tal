@@ -2,7 +2,7 @@
 
 [TAL](http://docs.zope.org/zope2/zope2book/AppendixC.html) is a template language created by the Zope project and implemented in a number of [different languages](https://en.wikipedia.org/wiki/Template_Attribute_Language).  The language is very compact, consisting of just 7 commands with a further 4 METAL commands available for macros.  This makes learning and understanding TAL more straightforward than many other templating languages.
 
-The tal library provides an implementation of TAL (and TALES and METAL) for Go.  Performance of tal is similar to the standard libraries html/template (benchmarks show faster execution but more allocations).
+The tal library provides an implementation of TAL (and TALES and METAL) for Go.  Performance of tal is similar to the standard library's html/template (benchmarks show faster execution but more allocations).
 
 A simple example of how to use tal:
 
