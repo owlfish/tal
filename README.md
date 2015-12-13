@@ -6,7 +6,8 @@ The tal library provides an implementation of TAL (and TALES and METAL) for Go. 
 
 A simple example of how to use tal:
 
-```package main
+```
+package main
 
 import "github.com/owlfish/tal"
 import "os"
@@ -41,7 +42,8 @@ func main() {
 }
 ```
 The output from the above is:
-```<html>
+```
+		<html>
 			<h1>Library</h1>
 			<div>
 				<h2>Raising Steam</h2>
