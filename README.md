@@ -57,7 +57,7 @@ The output from the above is:
 		</html>
 ```
 
-To get started with the latest version of tal use `go get github.com/owlfish/tal`.  Documentation is at ...
+To get started with the latest version of tal use `go get github.com/owlfish/tal`.  Documentation is provided through godoc and available online at [godoc.org](https://godoc.org/github.com/owlfish/tal)
 
 ## Status
 
