@@ -13,9 +13,9 @@ import (
 )
 
 /*
-A LogFunc is a function that can be used for logging.  log.Printf is a LogFunc.
+A logFunc is a function that can be used for logging.  log.Printf is a LogFunc.
 */
-type LogFunc func(fmt string, args ...interface{})
+type logFunc func(fmt string, args ...interface{})
 
 // defaultLogger does nothing - just returns
 func defaultLogger(fmt string, args ...interface{}) {
@@ -127,7 +127,7 @@ func (state *compileState) popTag(tag []byte) error {
 /*
 error returns a CompileError with the context of where it happened.
 */
-func (state *compileState) error(errorType int) *CompileError {
+func (state *compileState) error(errorType CompileErrorKind) *CompileError {
 	return newCompileError(errorType, state.tokenizer.Raw(), state.tokenizer.Buffered())
 }
 

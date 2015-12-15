@@ -617,7 +617,7 @@ func TestTemplateStringOutput(t *testing.T) {
 
 type errTest struct {
 	Template                 string
-	ExpectedCompileErrorCode int
+	ExpectedCompileErrorCode CompileErrorKind
 }
 
 func runCompileErrorTest(t *testing.T, test errTest) {

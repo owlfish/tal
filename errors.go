@@ -8,6 +8,9 @@ import (
 	"fmt"
 )
 
+// CompileErrorKind indicates the kind of error encountered while compiling
+type CompileErrorKind int
+
 /*
 CompileErrors are returned from CompileTemplate for compilation errors.
 */
@@ -17,7 +20,7 @@ type CompileError struct {
 	// NextData contains some of the unparsed data that happens after the error.
 	NextData string
 	// ErrorType specifies the kind of compilation error that has occured.
-	ErrorType int
+	ErrorType CompileErrorKind
 }
 
 // Error returns a text description of the compilation error.
@@ -42,7 +45,7 @@ func (err *CompileError) Error() string {
 
 const (
 	// ErrUnexpectedCloseTag is if a close tag is encountered for which an open tag was not seen.
-	ErrUnexpectedCloseTag = iota
+	ErrUnexpectedCloseTag CompileErrorKind = iota
 	// ErrUnknownTalCommand is if a tal: or metal: command is not one of the supported commands.
 	ErrUnknownTalCommand
 	// ErrExpressionMalformed is for expressions that don't match the tal command they are on.
@@ -54,7 +57,7 @@ const (
 )
 
 // Builds a new CompileError from the data provided.
-func newCompileError(errType int, lastToken []byte, nextData []byte) *CompileError {
+func newCompileError(errType CompileErrorKind, lastToken []byte, nextData []byte) *CompileError {
 	err := &CompileError{}
 	err.LastToken = string(lastToken)
 	err.NextData = string(nextData[:100])

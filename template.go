@@ -17,11 +17,11 @@ A RenderConfig function is one that can be passed as an option to Render.
 type RenderConfig func(t *Template, rc *renderContext)
 
 /*
-RenderDebugLogging uses the given LogFunc for debug output when rendering the template.
+RenderDebugLogging uses the given logger for debug output when rendering the template.
 
 To use the standard log library pass RenderDebugLogging(log.Printf) to the Render method.
 */
-func RenderDebugLogging(logger LogFunc) RenderConfig {
+func RenderDebugLogging(logger func(fmt string, args ...interface{})) RenderConfig {
 	return func(t *Template, rc *renderContext) {
 		rc.talesContext.debug = logger
 		rc.debug = logger
@@ -656,7 +656,7 @@ type renderContext struct {
 	// omitTagFlags is a stack of bools that is maintained by startTag and endTag to note whether the endTag should be omitted.
 	omitTagFlags []bool
 	// debug is the logger to use for debug messages
-	debug LogFunc
+	debug logFunc
 	// original configuration options passed in
 	config []RenderConfig
 	// slots that have been filled in the template calling this one.

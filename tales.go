@@ -157,7 +157,7 @@ type tales struct {
 	// repeatVariables holds any defined repeat variables
 	repeatVariables *variableContainer
 	// debug holds the function to use for debug logging
-	debug LogFunc
+	debug logFunc
 	// originalAttributes holds the attributes of the current element
 	originalAttributes attributesList
 }
