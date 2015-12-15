@@ -33,6 +33,8 @@ tal:define sets a local or global variable:
 
 Description: Sets the value of "name" to "expression".  By default the name will be applicable in the "local" scope, which consists of this tag, and all other tags nested inside this tag.  If the "global" keyword is used then this name will keep its value for the rest of the document.
 
+If the expression evaluates to nil, the variable will be set to the value nil.
+
 Example:
 
 	<div tal:define="global title book/theTitle; local chapterTitle book/chapter/theTitle">
@@ -45,6 +47,8 @@ tal:condition makes output of an element conditional:
 
 Description:  If the expression evaluates to true then this tag and all its children will be output.  If the expression evaluates to false then this tag and all its children will not be included in the output.
 
+An expression is considered false if it is not found, evaluates to nil, is an empty string, is zero or is a boolean false.  All other values are treated as true.
+
 Example:
 
 	<h1 tal:condition="user/firstLogin">Welcome to this page!</h1>
@@ -55,7 +59,7 @@ tal:repeat replicates an element a number of times:
 
 	tal:repeat="name expression"
 
-Description:  Evaluates "expression", and if it is a sequence, repeats this tag and all children once for each item in the sequence.  The "name" will be set to the value of the item in the current iteration, and is also the name of the repeat variable.  The repeat variable is accessible using the TAL path: repeat/name and has the following properties:
+Description:  Evaluates "expression", and if it is a slice or array, repeats this tag and all children once for each item in the sequence.  The "name" will be set to the value of the item in the current iteration, and is also the name of the repeat variable.  The repeat variable is accessible using the TAL path: repeat/name and has the following properties:
 
     index 		- Iteration number starting from zero
     number 		- Iteration number starting from one
@@ -70,6 +74,8 @@ Description:  Evaluates "expression", and if it is a sequence, repeats this tag 
     Roman	 	- Upper case version of roman
 
 The "first" and "last" properties are not supported.
+
+If the expression evaluates to tal.Default, the contents of the template will be kept as-is with no repeat variable set.  If the expression evaluates to an object other than a slice or array, or the slice or array is empty, the element and it's children are removed.
 
 Example:
 
@@ -87,6 +93,8 @@ tal:content replaces the content of an element:
 	tal:content="[text | structure] expression"
 
 Description:  Replaces the contents of the tag with the value of "expression".  By default, and if the "text" keyword is present, then the value of the expression will be escaped as required (i.e. characters "&<> will be escaped).  If the "structure" keyword is present then the value will be output with no escaping performed.
+
+If the expression evaluates to tal.Default then the template content is kept as is.  If the expression evaluates to nil then the child contents of the tag will be empty.
 
 Example:
 
@@ -110,7 +118,9 @@ tal:attributes sets or removes attributes on the element:
 
 	tal:attributes="name expression[;attributes-expression]"
 
-Description:  Evaluates each "expression" and replaces the tag's attribute "name".  If the expression evaluates to nothing then the attribute is removed from the tag.  If the expression evaluates to default then the original tag's attribute is kept.  If the "expression" requires a semi-colon then it must be escaped by using ";;".
+Description:  Evaluates each "expression" and replaces the tag's attribute "name".  If the expression evaluates to nil then the attribute is removed from the tag.  If the expression evaluates to default then the original tag's attribute is kept.  If the attribute is a HTML5 boolean attribute then it will be removed if the expression is not found, evaluates to nil, is an empty string, is zero or is a boolean false.  All other expression values are treated as true and the attribute value is set to equal to the attribute name.
+
+If the "expression" requires a semi-colon then it must be escaped by using ";;".
 
 Example:
 
@@ -123,6 +133,8 @@ tal:omit-tag removes the start and end tags:
 	tal:omit-tag="expression"
 
 Description: Removes the tag (leaving the tags content) if the expression evaluates to true.  If expression is empty then it is taken as true.
+
+An expression is considered false if it is not found, evaluates to nil, is an empty string, is zero or is a boolean false.  All other values are treated as true.
 
 Example:
 
@@ -149,17 +161,17 @@ Example:
 There are several built in variables that can be used in paths:
 
     nothing	- acts as nil in Go
-    default	- keeps the existing value of the node (tag content or attribute value)
+    default	- keeps the existing value of the node (tag content or attribute value), the same value as tal.Default
     repeat	- access to repeat variables (see tal:repeat)
     attrs	- a dictionary of original attributes of the current tag
 
 Path Variables
 
-Path variables allows for indirection in paths.
+Path variables allow for indirection in paths.
 
 	Syntax: [path:]object/?attribute
 
-Description:  The "attribute" is evaluated as a local or global variable, and it's value is used as the attribute to lookup on the object.  Useful for accessing the contents of a map within a loop:
+Description:  The "attribute" is evaluated as a local or global variable, and it's value is used as the attribute name to lookup on the object.  Useful for accessing the contents of a map within a loop:
 
 Example:
 

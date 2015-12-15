@@ -1,3 +1,7 @@
+// Copyright 2015 Colin Stewart.  All rights reserved.
+// Use of this source code is governed by an MIT
+// license that can be found in the LICENSE.txt file.
+
 package tal
 
 import (
@@ -241,6 +245,16 @@ func TestTalRepeatNoneSequence(t *testing.T) {
 		struct {
 			ContextValue interface{}
 		}{false},
+		`<body><h1>Test</h1> <ul> <li tal:repeat="vals ContextValue" class="line-item">Value <b tal:content="vals">Vals go here</b> done.</li></ul></body>`,
+		`<body><h1>Test</h1> <ul> </ul></body>`,
+	})
+}
+
+func TestTalRepeatEmptySequence(t *testing.T) {
+	runTest(t, talTest{
+		struct {
+			ContextValue interface{}
+		}{[0]string{}},
 		`<body><h1>Test</h1> <ul> <li tal:repeat="vals ContextValue" class="line-item">Value <b tal:content="vals">Vals go here</b> done.</li></ul></body>`,
 		`<body><h1>Test</h1> <ul> </ul></body>`,
 	})

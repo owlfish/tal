@@ -1,3 +1,7 @@
+// Copyright 2015 Colin Stewart.  All rights reserved.
+// Use of this source code is governed by an MIT
+// license that can be found in the LICENSE.txt file.
+
 package tal
 
 import (
@@ -212,13 +216,19 @@ func trueOrFalse(value interface{}) bool {
 }
 
 // isValueSequence returns true if the value can be used as a sequence, i.e is
-// a slice or an array.
+// a slice or an array and has a length greater than zero.
 func isValueSequence(value interface{}) bool {
 	a := reflect.ValueOf(value)
 	if a.Kind() == reflect.Slice {
-		return true
+		if a.Len() > 0 {
+			return true
+		}
+	} else if a.Kind() == reflect.Array {
+		if a.Len() > 0 {
+			return true
+		}
 	}
-	return a.Kind() == reflect.Array
+	return false
 }
 
 /*
