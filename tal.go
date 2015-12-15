@@ -538,7 +538,8 @@ No endAction is used.
 */
 func talOmitTagStart(originalAttributes []html.Attribute, talValue string, state *compileState) *CompileError {
 	if len(talValue) == 0 {
-		return state.error(ErrExpressionMissing)
+		// Special case, use default (i.e. true)
+		talValue = "default"
 	}
 	state.talEndTag.checkOmitTagFlag = true
 	state.talStartTag.omitTagExpression = talValue

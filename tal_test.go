@@ -240,6 +240,16 @@ func TestTalOmitTagTrue(t *testing.T) {
 	})
 }
 
+func TestTalOmitTagNoExpression(t *testing.T) {
+	runTest(t, talTest{
+		struct {
+			ContextValue interface{}
+		}{true},
+		`<body><h1>Test <b tal:omit-tag="" class="test" id="one">plan <a>at html</a></b> with an attribute <img src="test.png"></h1></body>`,
+		`<body><h1>Test plan <a>at html</a> with an attribute <img src="test.png"></h1></body>`,
+	})
+}
+
 func TestTalRepeatNoneSequence(t *testing.T) {
 	runTest(t, talTest{
 		struct {
@@ -578,10 +588,6 @@ func TestErrExpressionMissingContent(t *testing.T) {
 
 func TestErrExpressionMissingCondition(t *testing.T) {
 	runCompileErrorTest(t, errTest{`<html><body tal:condition="">Hi</body></html>`, ErrExpressionMissing})
-}
-
-func TestErrExpressionMissingOmitTag(t *testing.T) {
-	runCompileErrorTest(t, errTest{`<html><body tal:omit-tag="">Hi</body></html>`, ErrExpressionMissing})
 }
 
 func TestErrSlotOutsideMacro(t *testing.T) {
