@@ -356,7 +356,7 @@ type renderEndRepeat struct {
 render for ending a loop of a tal:repeat command.
 
 A check is made to confirm that we are already in a loop by looking for a repeat
-variable with this name and then verifying the repeatId's match.
+variable with this name and then verifying the repeatIds match.
 
 The sequence position is advanced.  If this takes it beyond the length of the
 sequence, the repeat and local variables are removed.  Otherwise the
@@ -718,7 +718,7 @@ func (t *Template) String() string {
 /*
 addRenderInstruction is used to add plain text to the template for output.
 
-If the last instruction in the template is a renderData, it's data is appended
+If the last instruction in the template is a renderData, its data is appended
 to with the new data.  If not a new renderData instruction is created.
 */
 func (t *Template) addRenderInstruction(data []byte) {
@@ -799,9 +799,9 @@ func (t *Template) Render(context interface{}, out io.Writer, config ...RenderCo
 }
 
 /*
-Templates are a TalesValue that provide it's macros as properties.
+Templates are a TalesValue that provides its macros as properties.
 
-A Template's own macros are made available to it under the "macros" object.
+A Templates own macros are made available to it under the "macros" object.
 */
 func (t *Template) TalesValue(name string) interface{} {
 	result, ok := t.macros[name]
